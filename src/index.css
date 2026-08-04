@@ -248,6 +248,14 @@ body { background: #e8edf7; color: var(--v03-ink); letter-spacing: -.012em; }
 .v03-sidebar > button:first-child svg { color: var(--v03-teal); }
 .v03-sidebar > button:first-child svg { color: var(--v03-teal) !important; }
 .v03-sidebar .group:hover { background: rgba(255,255,255,.15); }
+.v03-sidebar .sidebar-compare-button { color: #fff !important; border-color: rgba(255,255,255,.65) !important; background: rgba(20,39,116,.18); }
+.v03-sidebar .sidebar-compare-button:hover, .v03-sidebar .sidebar-compare-button.active { background: rgba(15,31,94,.4); border-color: #fff !important; }
+.v03-sidebar .sidebar-company-hint { color: #fff !important; border-color: rgba(255,255,255,.42) !important; background: rgba(15,31,94,.28); }
+.v03-sidebar .sidebar-history-card { color: #fff; border-color: rgba(255,255,255,.3) !important; background: rgba(255,255,255,.1); }
+.v03-sidebar .sidebar-history-card:hover { background: rgba(255,255,255,.17); border-color: rgba(255,255,255,.55) !important; }
+.v03-sidebar .sidebar-history-card.active { background: rgba(15,31,94,.32) !important; border-color: #fff !important; box-shadow: inset 3px 0 0 #fff; }
+.v03-sidebar .sidebar-history-card .text-slate-500 { color: rgba(255,255,255,.86) !important; }
+.v03-sidebar .sidebar-score-badge { color: #172554 !important; background: #fff !important; border-color: #fff !important; box-shadow: 0 3px 10px rgba(15,31,94,.18); }
 
 .v03-header { background: rgba(255,255,255,.94); border-bottom: 1px solid var(--v03-line); backdrop-filter: blur(16px); }
 .v03-header input { background: #f7fafb !important; border-color: #dce6e9 !important; color: var(--v03-ink) !important; }
