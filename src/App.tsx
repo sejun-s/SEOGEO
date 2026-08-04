@@ -3,6 +3,7 @@ import type { AuditResult, DetailTabType } from './types';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { ScoreOverview } from './components/ScoreOverview';
+import { SiteCrawlPanel } from './components/SiteCrawlPanel';
 import { GlassBlockGrid } from './components/GlassBlockGrid';
 import { DetailPage } from './components/DetailPage';
 import { AnalysisLog } from './components/AnalysisLog';
@@ -569,6 +570,7 @@ export function App() {
                 {/* URL 분석 탭 */}
                 {!showCompare && mainTab === 'seo' && (<>
                 <ScoreOverview audit={selectedAudit} />
+                <SiteCrawlPanel audit={selectedAudit} />
 
                 <KeywordOptimizer
                   audit={selectedAudit}

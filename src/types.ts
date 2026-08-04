@@ -126,6 +126,7 @@ export interface AuditResult {
 
   // 실제 URL에서 추출한 신호 (스트리밍 분석 시 채워짐)
   pageSignals?: PageSignals;
+  siteCrawl?: SiteCrawlResult;
 
   // AI 분석 결과 (새 구조)
   summary?: string;
@@ -244,4 +245,47 @@ export interface AIAnalysisResponse {
   strengthSummary: string[];
   criticalIssues: string[];
   quickWins: string[];
+  siteCrawl?: SiteCrawlResult;
+}
+
+export interface CrawlPageResult {
+  url: string;
+  depth: number;
+  statusCode: number;
+  redirected: boolean;
+  responseTime: number;
+  title: string;
+  metaDescription: string;
+  canonical: string;
+  h1Count: number;
+  wordCount: number;
+  internalLinks: string[];
+  noindex: boolean;
+  hasSchema: boolean;
+  error?: string;
+}
+
+export interface SiteCrawlIssue {
+  id: string;
+  severity: 'error' | 'warning' | 'notice';
+  title: string;
+  count: number;
+  urls: string[];
+  recommendation: string;
+}
+
+export interface SiteCrawlResult {
+  startedAt: string;
+  completedAt: string;
+  durationMs: number;
+  scannedPages: number;
+  discoveredUrls: number;
+  healthyPages: number;
+  errorCount: number;
+  warningCount: number;
+  healthScore: number;
+  truncated: boolean;
+  limits: { maxPages: number; maxDepth: number; concurrency: number };
+  pages: CrawlPageResult[];
+  issues: SiteCrawlIssue[];
 }

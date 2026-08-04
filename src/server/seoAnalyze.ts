@@ -5,6 +5,7 @@ import type {
   SchemaEvaluationLevel,
   SearchEligibilityResult,
 } from '../types.ts'
+import { crawlSite } from './siteCrawler.ts'
 
 export type { PageSignals }
 
@@ -1001,7 +1002,17 @@ export async function runAnalysis(
 ): Promise<{ result: Record<string, unknown>; signals: PageSignals }> {
   const now = () => Date.now()
 
-  const signals = await fetchPageSignals(targetUrl, emit)
+  const [signals, siteCrawl] = await Promise.all([
+    fetchPageSignals(targetUrl, emit),
+    crawlSite(targetUrl),
+  ])
+
+  emit?.({
+    type: 'step',
+    msg: `사이트 크롤링 완료 — ${siteCrawl.scannedPages}페이지, Health ${siteCrawl.healthScore}점`,
+    level: siteCrawl.errorCount > 0 ? 'warn' : 'success',
+    ts: now(),
+  })
 
   emit?.({ type: 'signals', data: signals, ts: now() })
 
@@ -1026,6 +1037,7 @@ export async function runAnalysis(
   if (!geminiKey) {
     emit?.({ type: 'step', msg: `📋 규칙 기반 SEO+AEO 분석 완료 (Gemini 키 없음 — 실측 데이터 기반)`, level: 'success', ts: now() })
     const result = generateRuleBasedResult(signals, scores)
+    result.siteCrawl = siteCrawl
     return { result, signals }
   }
 
@@ -1130,6 +1142,7 @@ criteria 15개 필수: technical(3), chatgpt(2), geo(3), eeat(3), schema(2), bin
     const msg = errData.error?.message ?? `Gemini API 오류 (HTTP ${geminiRes.status})`
     emit?.({ type: 'step', msg: `⚠️ Gemini 오류: ${msg} — 규칙 기반 분석으로 전환`, level: 'warn', ts: now() })
     const result = generateRuleBasedResult(signals, scores)
+    result.siteCrawl = siteCrawl
     return { result, signals }
   }
 
@@ -1155,6 +1168,7 @@ criteria 15개 필수: technical(3), chatgpt(2), geo(3), eeat(3), schema(2), bin
   result.eeatScore          = scores.eeatScore
   result.schemaScore        = scores.schemaScore
   result.bingScore          = scores.bingScore
+  result.siteCrawl          = siteCrawl
 
   const criteriaCount = Array.isArray(result.criteria) ? result.criteria.length : 0
   emit?.({

@@ -127,6 +127,7 @@ function mapAIResponseToAudit(url: string, ai: AIAnalysisResponse, signals?: Pag
     criticalIssues: ai.criticalIssues,
     quickWins: ai.quickWins,
     pageSignals: signals,
+    siteCrawl: ai.siteCrawl,
     // v3 점수 모델 필드 (signals가 있을 때만)
     ...(signals ? (() => {
       const v3 = calcCategoryScore(signals)
