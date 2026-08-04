@@ -356,6 +356,26 @@ body { background: #e8edf7; color: var(--v03-ink); letter-spacing: -.012em; }
 .v04-report-actions button:first-child { border-color:var(--v03-teal); color:#fff; background:var(--v03-teal); box-shadow:0 8px 18px rgba(79,109,245,.18); }
 .v04-report-actions button:hover { transform:translateY(-1px); }
 
+/* v0.4 typography tone — color communicates state, not decoration */
+.v03-content :is(h1,h2,h3,strong) { color:#1b2559; }
+.v03-content :is(p,label) { color:#66718b; }
+.v03-content :is(small) { color:#8a94aa; }
+.v03-content :is(span,div,p,a,button,label,small,strong)[class*="text-purple-"],
+.v03-content :is(span,div,p,a,button,label,small,strong)[class*="text-indigo-"],
+.v03-content :is(span,div,p,a,button,label,small,strong)[class*="text-blue-"],
+.v03-content :is(span,div,p,a,button,label,small,strong)[class*="text-cyan-"],
+.v03-content :is(span,div,p,a,button,label,small,strong)[class*="text-teal-"],
+.v03-content :is(span,div,p,a,button,label,small,strong)[class*="text-pink-"] { color:#52607b !important; }
+.v03-content :is(span,div,p,a,button,label,small,strong)[class*="text-emerald-"],
+.v03-content :is(span,div,p,a,button,label,small,strong)[class*="text-amber-"],
+.v03-content :is(span,div,p,a,button,label,small,strong)[class*="text-orange-"],
+.v03-content :is(span,div,p,a,button,label,small,strong)[class*="text-rose-"] { color:#52607b !important; }
+.v03-content .btn-purple, .v03-content .v04-report-actions button:first-child,
+.v03-content .v03-action-banner button { color:#fff !important; }
+.v03-content .v03-status-pill { color:inherit; }
+.v03-content input, .v03-content textarea { color:#1b2559 !important; }
+.v03-content input::placeholder, .v03-content textarea::placeholder { color:#9aa3b6 !important; }
+
 *:focus-visible { outline: 2px solid var(--v03-teal); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; } }
 
