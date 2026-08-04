@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { AuditResult, CriteriaItem } from '../types';
-import { CheckSquare, Square, RefreshCw, Sparkles, Copy, Check, ListChecks } from 'lucide-react';
+import { CheckSquare, Square, RefreshCw, Sparkles, Copy, Check, ListChecks, ChevronDown, ChevronUp } from 'lucide-react';
 
 const PRIORITY_LABEL: Record<string, { label: string; cls: string }> = {
   critical: { label: '즉시', cls: 'bg-rose-500/15 text-rose-400 border-rose-500/25' },
@@ -45,10 +45,45 @@ interface Props {
 export const FixChecklist: React.FC<Props> = ({ audit, onReanalyze, isScanning }) => {
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [showAll, setShowAll] = useState(false);
 
-  const items: CriteriaItem[] = (audit.criteria ?? [])
-    .filter((c) => c.status !== 'pass')
-    .sort((a, b) => ({ critical: 0, high: 1, medium: 2, low: 3 }[a.priority] - { critical: 0, high: 1, medium: 2, low: 3 }[b.priority]));
+  useEffect(() => {
+    setChecked(new Set());
+    setExpanded(new Set());
+    setShowAll(false);
+  }, [audit.url]);
+
+  const items = useMemo(() => {
+    const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9가-힣]/g, '');
+    const criteria = (audit.criteria ?? []).filter(item => item.status !== 'pass');
+    const known = new Set(criteria.flatMap(item => [normalize(item.id), normalize(item.name), normalize(item.improvement.split('\n')[0])]));
+
+    const legacy: CriteriaItem[] = (audit.metrics ?? [])
+      .filter(metric => metric.status !== 'pass')
+      .filter(metric => ![normalize(metric.id), normalize(metric.title), normalize(metric.recommendation.split('\n')[0])].some(key => key && known.has(key)))
+      .map(metric => ({
+        id: `metric-${metric.id}`,
+        name: metric.title,
+        category: metric.category,
+        score: metric.score,
+        status: metric.status,
+        weight: metric.scoreBoost > 10 ? '높음' : metric.scoreBoost > 0 ? '중간' : '낮음',
+        scoringBasis: metric.currentValue,
+        evaluationCriteria: metric.referenceDoc ?? '기존 진단 규칙',
+        currentState: metric.currentValue,
+        improvement: metric.recommendation,
+        priority: metric.status === 'fail' ? (metric.score <= 40 ? 'critical' : 'high') : 'medium',
+        estimatedScoreGain: metric.scoreBoost,
+        referenceGuide: metric.referenceDoc ?? '기존 진단 규칙',
+        codeSnippet: metric.codeSnippet,
+        codeType: metric.codeSnippet?.includes('User-agent:') ? 'robots' : metric.codeSnippet?.includes('application/ld+json') ? 'json' : metric.codeSnippet ? 'html' : undefined,
+      }));
+
+    return [...criteria, ...legacy]
+      .sort((a, b) => ({ critical: 0, high: 1, medium: 2, low: 3 }[a.priority] - { critical: 0, high: 1, medium: 2, low: 3 }[b.priority] || b.estimatedScoreGain - a.estimatedScoreGain));
+  }, [audit.criteria, audit.metrics]);
+
+  const visibleItems = showAll ? items : items.slice(0, 7);
 
   if (items.length === 0) return null;
 
@@ -110,7 +145,7 @@ export const FixChecklist: React.FC<Props> = ({ audit, onReanalyze, isScanning }
 
       {/* Items */}
       <div className="space-y-1.5">
-        {items.map((item) => {
+        {visibleItems.map((item) => {
           const done = checked.has(item.id);
           const open = expanded.has(item.id);
           const p = PRIORITY_LABEL[item.priority];
@@ -166,6 +201,15 @@ export const FixChecklist: React.FC<Props> = ({ audit, onReanalyze, isScanning }
           );
         })}
       </div>
+
+      {items.length > 7 && (
+        <button
+          onClick={() => setShowAll(value => !value)}
+          className="w-full py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-xs font-bold text-slate-800 hover:bg-slate-100 flex items-center justify-center gap-1.5 transition-colors"
+        >
+          {showAll ? <><ChevronUp className="w-4 h-4" /> 중요 항목만 보기</> : <><ChevronDown className="w-4 h-4" /> 전체 {items.length}개 개선 항목 보기</>}
+        </button>
+      )}
     </div>
   );
 };

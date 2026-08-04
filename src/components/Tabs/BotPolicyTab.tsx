@@ -131,27 +131,28 @@ Allow: /`}
       </div>
 
       {/* Technical SEO Checklist */}
-      <div className="glass-card p-5 border-indigo-500/20">
-        <h4 className="text-sm font-semibold text-slate-200 mb-3 flex items-center gap-2">
-          <ShieldAlert className="w-4 h-4 text-amber-400" />
+      <div className="glass-card p-5 border-slate-200">
+        <h4 className="text-[15px] font-extrabold text-slate-900 mb-1 flex items-center gap-2">
+          <ShieldAlert className="w-4 h-4 text-blue-800" />
           Technical SEO & IndexNow 핵심 진단 목록
         </h4>
+        <p className="text-xs text-slate-600 mb-4 ml-6">기술 검색 노출과 AI 크롤러 접근에 영향을 주는 세부 항목입니다.</p>
 
-        <div className="space-y-3 text-xs">
+        <div className="space-y-2.5">
           {audit.metrics
             .filter((m) => m.category === 'technical' || m.category === 'chatgpt' || m.category === 'bing')
             .map((metric) => (
-              <div key={metric.id} className="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-start justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="font-semibold text-slate-200 flex items-center gap-2">
+              <div key={metric.id} className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex items-start justify-between gap-4">
+                <div className="space-y-1.5 min-w-0">
+                  <div className="font-extrabold text-[13px] text-slate-900 flex items-center gap-2 flex-wrap">
                     <span>{metric.title}</span>
-                    <span className="text-[10px] px-2 py-0.2 rounded bg-slate-800 text-indigo-300 font-mono">
+                    {metric.referenceDoc && <span className="text-[10px] px-2 py-0.5 rounded-md bg-white border border-slate-300 text-slate-700 font-mono font-semibold">
                       {metric.referenceDoc}
-                    </span>
+                    </span>}
                   </div>
-                  <p className="text-slate-400">{metric.recommendation}</p>
+                  <p className="text-[12px] text-slate-700 font-medium leading-5">{metric.recommendation}</p>
                 </div>
-                <span className="font-mono font-bold text-amber-400 shrink-0">{metric.score}점</span>
+                <span className="font-mono font-extrabold text-sm text-slate-900 shrink-0 bg-white border border-slate-300 rounded-lg px-2.5 py-1">{metric.score}점</span>
               </div>
             ))}
         </div>
