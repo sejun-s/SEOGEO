@@ -7,7 +7,6 @@ import { SiteCrawlPanel } from './components/SiteCrawlPanel';
 import { GlassBlockGrid } from './components/GlassBlockGrid';
 import { DetailPage } from './components/DetailPage';
 import { AnalysisLog } from './components/AnalysisLog';
-import { SummaryReport } from './components/SummaryReport';
 import { FixChecklist } from './components/FixChecklist';
 import { analyzeUrl } from './lib/analyzeUrl';
 import { compareSiteCrawls } from './lib/siteCrawlComparison';
@@ -18,6 +17,8 @@ import { AnalyticsCard } from './components/AnalyticsCard';
 import { GA4AccountCard } from './components/GA4AccountCard';
 import { InsightPanel } from './components/InsightPanel';
 import { CompareView } from './components/CompareView';
+import { AnalysisProgress } from './components/AnalysisProgress';
+import { MobileNav } from './components/MobileNav';
 
 const HISTORY_KEY = 'seo-analyzer-history';
 
@@ -93,7 +94,7 @@ function LandingPage({
   };
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center px-6 py-16">
+    <div className="v03-landing flex-1 flex flex-col items-center justify-center px-6 py-16">
       {/* Ambient background glow */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden -z-10">
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] rounded-full bg-purple-600/8 blur-[100px]" />
@@ -121,7 +122,7 @@ function LandingPage({
 
       {/* Search box */}
       <form onSubmit={handleSubmit} className="w-full max-w-2xl">
-        <div className={`relative flex items-center rounded-2xl border transition-all duration-200 ${
+        <div className={`v03-search-box relative flex items-center rounded-2xl border transition-all duration-200 ${
           focused
             ? 'border-purple-500/60 shadow-lg shadow-purple-500/10 bg-slate-900'
             : 'border-white/12 bg-slate-900/70'
@@ -165,7 +166,7 @@ function LandingPage({
 
       {/* Keyword tag input */}
       <div className="w-full max-w-2xl mt-3">
-        <div className={`flex flex-wrap items-center gap-2 min-h-[44px] px-3 py-2 rounded-xl border transition-all duration-200 ${
+        <div className={`v03-keyword-box flex flex-wrap items-center gap-2 min-h-[44px] px-3 py-2 rounded-xl border transition-all duration-200 ${
           kwFocused ? 'border-purple-500/40 bg-slate-900' : 'border-white/8 bg-slate-900/40'
         }`}>
           <Tag className="w-3.5 h-3.5 text-slate-600 shrink-0" />
@@ -201,7 +202,7 @@ function LandingPage({
       </div>
 
       {/* Example quick-picks */}
-      <div className="mt-5 flex items-center gap-2 flex-wrap justify-center">
+      <div className="v03-example-row mt-5 flex items-center gap-2 flex-wrap justify-center">
         <span className="text-[11px] text-slate-600">예시:</span>
         {EXAMPLE_URLS.map((ex) => (
           <button
@@ -285,7 +286,7 @@ export function App() {
     setScanError(null);
     setAnalysisEvents([]);
     setAnalysisSignals(null);
-    setShowLog(true);
+    setShowLog(false);
     setMainTab('seo');
     setGa4Tab('list');
     setHighlightCriteriaId(null);
@@ -331,16 +332,6 @@ export function App() {
 
   const handleRemoveKeyword = useCallback((kw: string) => {
     setKeywords((prev) => prev.filter((k) => k !== kw));
-  }, []);
-
-  const handleNavigateToDetail = useCallback((category: string, criteriaId: string) => {
-    const categoryToTab: Record<string, DetailTabType> = {
-      technical: 'technical', chatgpt: 'chatgpt', geo: 'geo',
-      eeat: 'eeat', schema: 'schema', bing: 'cms',
-    };
-    setActiveDetailTab(categoryToTab[category] ?? 'technical');
-    setViewMode('detail');
-    setHighlightCriteriaId(criteriaId);
   }, []);
 
   const handleGoHome = useCallback(() => {
@@ -425,7 +416,7 @@ export function App() {
   const showResults = selectedAudit !== null;
 
   return (
-    <div className="h-screen w-screen overflow-hidden bg-[#060b17] text-slate-100 flex flex-col md:flex-row">
+    <div className="v03-shell h-screen w-screen overflow-hidden flex flex-col md:flex-row">
       <Sidebar
         history={history}
         selectedAuditUrl={selectedAudit?.url ?? null}
@@ -450,26 +441,7 @@ export function App() {
         <main className="flex-1 overflow-y-auto flex flex-col">
           {/* Scanning overlay */}
           {isScanning && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm">
-              <div className="glass-card p-8 flex flex-col items-center gap-4 max-w-sm mx-4 text-center">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/30">
-                  <Loader2 className="w-8 h-8 text-white animate-spin" />
-                </div>
-                <div>
-                  <div className="text-lg font-bold text-white mb-1">AI 분석 중</div>
-                  <div className="text-sm text-slate-400">6대 SEO 카테고리 · 기준별 점수 근거 생성</div>
-                </div>
-                <div className="flex gap-1.5">
-                  {[0, 1, 2].map((i) => (
-                    <div
-                      key={i}
-                      className="w-2 h-2 rounded-full bg-purple-400"
-                      style={{ animation: `pulse-ring 1.5s ease-in-out ${i * 0.3}s infinite` }}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
+            <div className="v03-progress-overlay"><AnalysisProgress events={analysisEvents} /></div>
           )}
 
           {showCompare && compareUrls.length >= 2 ? (
@@ -502,7 +474,7 @@ export function App() {
               )}
 
               {/* 탭 바 */}
-              <div className="border-b border-white/10 bg-slate-950/40 backdrop-blur-sm sticky top-0 z-10">
+              <div className="v03-main-tabs sticky top-0 z-10">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex gap-0">
                   {([
                     { id: 'seo', label: 'URL 분석', icon: Globe, beta: false },
@@ -533,7 +505,7 @@ export function App() {
                 </div>
               </div>
 
-              <div className="max-w-7xl mx-auto w-full px-4 py-6 sm:px-6 lg:px-8 space-y-6">
+              <div className="v03-content max-w-7xl mx-auto w-full px-4 py-6 sm:px-6 lg:px-8 space-y-6">
 
                 {/* GA4 탭 */}
                 {!showCompare && mainTab === 'ga4' && (
@@ -591,7 +563,13 @@ export function App() {
                   onRemoveKeyword={handleRemoveKeyword}
                 />
 
-                <SummaryReport audit={selectedAudit} onNavigateToDetail={handleNavigateToDetail} />
+                <div id="action-hub" className="scroll-mt-24">
+                  <FixChecklist
+                    audit={selectedAudit}
+                    onReanalyze={handleScanUrl}
+                    isScanning={isScanning}
+                  />
+                </div>
 
                 {/* 분석 로그 */}
                 {showLog && (analysisEvents.length > 0 || analysisSignals) && (
@@ -631,11 +609,6 @@ export function App() {
                       <GlassBlockGrid audit={selectedAudit} onSelectDetailTab={handleSelectBlockTab} />
                     </div>
 
-                    <FixChecklist
-                      audit={selectedAudit}
-                      onReanalyze={handleScanUrl}
-                      isScanning={isScanning}
-                    />
                   </div>
                 )}
                 </>)}
@@ -667,6 +640,7 @@ export function App() {
           )}
         </main>
       </div>
+      {showResults && <MobileNav onHome={handleGoHome} onCompare={handleToggleCompareMode} />}
     </div>
   );
 }

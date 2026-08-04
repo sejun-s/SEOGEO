@@ -49,7 +49,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [adminOpen, setAdminOpen] = useState(false);
   return (
-    <aside className="w-full md:w-64 lg:w-72 shrink-0 border-b md:border-b-0 md:border-r border-white/10 bg-slate-950/60 backdrop-blur-2xl flex flex-col p-4 overflow-y-auto">
+    <aside className="v03-sidebar w-full md:w-64 lg:w-72 shrink-0 flex flex-col p-4 overflow-y-auto">
       {/* Brand */}
       <button
         onClick={onGoHome}

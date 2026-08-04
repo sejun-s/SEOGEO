@@ -73,8 +73,8 @@ export const FixChecklist: React.FC<Props> = ({ audit, onReanalyze, isScanning }
         <div className="flex items-center gap-2.5">
           <ListChecks className="w-4 h-4 text-emerald-400 shrink-0" />
           <div>
-            <div className="text-sm font-semibold text-white">수정 체크리스트</div>
-            <div className="text-[11px] text-slate-500 mt-0.5">수정 완료한 항목 체크 → 재검증 실행</div>
+            <div className="text-sm font-semibold text-white">개선 액션</div>
+            <div className="text-[11px] text-slate-500 mt-0.5">중요한 문제부터 수정하고 바로 재검사하세요</div>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -114,7 +114,7 @@ export const FixChecklist: React.FC<Props> = ({ audit, onReanalyze, isScanning }
           const done = checked.has(item.id);
           const open = expanded.has(item.id);
           const p = PRIORITY_LABEL[item.priority];
-          const impactText = item.priority === 'critical' ? '영향도 높음 🔥' : item.priority === 'high' ? '영향도 중간 ⚡' : '영향도 보통 💡';
+          const impactText = `예상 +${item.estimatedScoreGain}점`;
           return (
             <div
               key={item.id}
