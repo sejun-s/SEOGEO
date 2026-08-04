@@ -15,4 +15,8 @@ describe('reportHtml', () => {
   it('creates a safe report filename', () => {
     expect(reportFileName(audit)).toMatch(/^SEOGEO-example\.com-\d{4}-\d{2}-\d{2}\.html$/)
   })
+
+  it('can omit the standalone toolbar inside an embedded preview', () => {
+    expect(buildReportHtml(audit, { showToolbar: false })).not.toContain('class="toolbar"')
+  })
 })

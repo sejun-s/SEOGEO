@@ -10,7 +10,8 @@ function reportBlob(html: string) {
 export function ReportActions({ audit }: { audit: AuditResult }) {
   const [isOpen, setIsOpen] = useState(false)
   const iframeRef = useRef<HTMLIFrameElement>(null)
-  const html = useMemo(() => buildReportHtml(audit), [audit])
+  const previewHtml = useMemo(() => buildReportHtml(audit, { showToolbar: false }), [audit])
+  const downloadHtml = useMemo(() => buildReportHtml(audit), [audit])
 
   useEffect(() => {
     if (!isOpen) return
@@ -31,7 +32,7 @@ export function ReportActions({ audit }: { audit: AuditResult }) {
   }
 
   const download = () => {
-    const url = URL.createObjectURL(reportBlob(html))
+    const url = URL.createObjectURL(reportBlob(downloadHtml))
     const anchor = document.createElement('a')
     anchor.href = url
     anchor.download = reportFileName(audit)
@@ -58,7 +59,7 @@ export function ReportActions({ audit }: { audit: AuditResult }) {
             <button className="close" onClick={() => setIsOpen(false)} aria-label="보고서 닫기"><X size={18} /></button>
           </div>
         </header>
-        <iframe ref={iframeRef} title={`${audit.title} SEO GEO 보고서`} srcDoc={html} />
+        <iframe ref={iframeRef} title={`${audit.title} SEO GEO 보고서`} srcDoc={previewHtml} />
       </div>
     </div>}
   </>
