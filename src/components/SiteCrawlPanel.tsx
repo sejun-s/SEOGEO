@@ -5,12 +5,6 @@ export function SiteCrawlPanel({ audit }: { audit: AuditResult }) {
   const crawl = audit.siteCrawl;
   if (!crawl) return null;
 
-  const scoreColor = crawl.healthScore >= 90
-    ? 'text-emerald-400'
-    : crawl.healthScore >= 70
-      ? 'text-amber-400'
-      : 'text-rose-400';
-
   return (
     <section className="glass-card overflow-hidden">
       <div className="px-5 py-4 border-b border-white/8 flex items-center justify-between gap-4">
@@ -21,7 +15,7 @@ export function SiteCrawlPanel({ audit }: { audit: AuditResult }) {
           <p className="text-[11px] text-slate-500 mt-1">Sitemap과 내부 링크를 따라 탐색한 실측 결과입니다.</p>
           <p className="text-[10px] text-slate-600 mt-1">점수 기준 {crawl.scoreModelVersion} · robots.txt 제외 {crawl.blockedByRobots}개</p>
         </div>
-        <div className={`text-3xl font-black ${scoreColor}`}>{crawl.healthScore}</div>
+        <div className="text-3xl font-black font-mono text-[#1b2559]">{crawl.healthScore}</div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-white/5">
@@ -31,9 +25,9 @@ export function SiteCrawlPanel({ audit }: { audit: AuditResult }) {
           { label: '오류', value: crawl.errorCount, icon: AlertTriangle, color: 'text-rose-400' },
           { label: '소요 시간', value: `${(crawl.durationMs / 1000).toFixed(1)}초`, icon: Clock3, color: 'text-purple-400' },
         ].map(({ label, value, icon: Icon, color }) => (
-          <div key={label} className="bg-slate-950/50 px-4 py-3">
+          <div key={label} className="bg-[#f7f9ff] px-4 py-3">
             <div className="flex items-center gap-1.5 text-[10px] text-slate-500"><Icon className={`w-3 h-3 ${color}`} />{label}</div>
-            <div className="text-lg font-bold text-white mt-1">{value}</div>
+            <div className="text-lg font-bold font-mono text-[#1b2559] mt-1">{value}</div>
           </div>
         ))}
       </div>

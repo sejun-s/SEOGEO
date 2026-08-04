@@ -66,14 +66,14 @@ export function ScoreOverview({ audit }: ScoreOverviewProps) {
       <div className="v03-score-grid">
         <article className="v03-primary-score">
           <div className="v03-score-label"><ShieldCheck size={17} /> SEO 기반 점수</div>
-          <div className="v03-score-number" style={{ color: primaryTone.text }}>{primaryScore}<small>/100</small></div>
+          <div className="v03-score-number">{primaryScore}<small>/100</small></div>
           <span className="v03-status-pill" style={{ color: primaryTone.text, background: primaryTone.bg }}>{primaryTone.label}</span>
           <p>색인, 크롤링, 콘텐츠 구조를 기준으로 한 핵심 준비도입니다.</p>
         </article>
 
         <article className="v03-primary-score ai">
           <div className="v03-score-label"><Sparkles size={17} /> AI 인용 준비도</div>
-          <div className="v03-score-number" style={{ color: tone(aiScore).text }}>{aiScore}<small>/100</small></div>
+          <div className="v03-score-number">{aiScore}<small>/100</small></div>
           <span className="v03-status-pill" style={{ color: tone(aiScore).text, background: tone(aiScore).bg }}>{tone(aiScore).label}</span>
           <p>AI 검색 서비스가 내용을 이해하고 인용하기 쉬운 정도입니다.</p>
         </article>
@@ -99,7 +99,7 @@ export function ScoreOverview({ audit }: ScoreOverviewProps) {
           <div key={item.key} className="v03-category-row">
             <div><span>{item.label}</span><small>{tone(item.score).label}</small></div>
             <div className="v03-bar"><i style={{ width: `${item.score}%`, background: tone(item.score).text }} /></div>
-            <b style={{ color: tone(item.score).text }}>{item.score}</b>
+            <b>{item.score}</b>
           </div>
         ))}
       </div>
