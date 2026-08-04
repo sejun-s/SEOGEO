@@ -282,6 +282,13 @@ body { background: #e8edf7; color: var(--v03-ink); letter-spacing: -.012em; }
 .v03-shell .glass-card :is(input, textarea)::placeholder,
 .v03-shell .glass-block :is(input, textarea)::placeholder { color: #64748b !important; opacity: 1; }
 
+/* 밝은 카드 위의 파스텔 글자색을 신뢰감 있는 진한 상태색으로 통일 */
+.v03-shell :is(.glass-card, .glass-block) :is(.text-emerald-300, .text-emerald-400, .text-emerald-500) { color: #047857 !important; }
+.v03-shell :is(.glass-card, .glass-block) :is(.text-amber-300, .text-amber-400, .text-amber-500, .text-orange-400, .text-yellow-300) { color: #a16207 !important; }
+.v03-shell :is(.glass-card, .glass-block) :is(.text-rose-300, .text-rose-400, .text-rose-500) { color: #be123c !important; }
+.v03-shell :is(.glass-card, .glass-block) :is(.text-purple-300, .text-purple-400, .text-purple-500, .text-indigo-400) { color: #4338ca !important; }
+.v03-shell :is(.glass-card, .glass-block) :is(.text-cyan-300, .text-cyan-400, .text-teal-400, .text-blue-400) { color: #0f5f75 !important; }
+
 .v03-score-overview { background: #fff; border: 1px solid var(--v03-line); border-radius: 28px 28px 28px 12px; padding: 26px; box-shadow: 0 18px 48px rgba(48, 60, 126, .09); }
 .v03-score-heading { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; margin-bottom: 22px; }
 .v03-eyebrow { display: block; color: var(--v03-teal); font-size: 10px; letter-spacing: .14em; font-weight: 800; margin-bottom: 6px; }
