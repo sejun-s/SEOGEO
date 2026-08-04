@@ -480,7 +480,7 @@ export function App() {
                   {([
                     { id: 'seo', label: 'URL 분석', icon: Globe, beta: false },
                     { id: 'ga4', label: 'GA4 분석', icon: BarChart3, beta: false },
-                    { id: 'insights', label: '인사이트', icon: Lightbulb, beta: true },
+                    { id: 'insights', label: 'AI 인사이트', icon: Lightbulb, beta: false },
                   ] as const).map(({ id, label, icon: Icon, beta }) => (
                     <button
                       key={id}
