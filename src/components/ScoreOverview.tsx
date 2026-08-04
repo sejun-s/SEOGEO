@@ -37,8 +37,8 @@ function RadarChart({ values }: { values: Array<{ label: string; score: number }
         const [labelX, labelY] = point(index, 1.2).split(',').map(Number)
         return <g key={item.label}><line x1={center} y1={center} x2={x} y2={y} stroke="#e1ecec" /><text x={labelX} y={labelY} textAnchor="middle" dominantBaseline="middle">{item.label}</text></g>
       })}
-      <polygon points={data} fill="rgba(28, 166, 158, .2)" stroke="#1ca69e" strokeWidth="2.5" />
-      {values.map((item, index) => { const [x, y] = point(index, item.score / 100).split(',').map(Number); return <circle key={item.label} cx={x} cy={y} r="3.5" fill="#1ca69e"><title>{item.label} {item.score}점</title></circle> })}
+      <polygon points={data} fill="rgba(79, 109, 245, .18)" stroke="#4f6df5" strokeWidth="2.5" />
+      {values.map((item, index) => { const [x, y] = point(index, item.score / 100).split(',').map(Number); return <circle key={item.label} cx={x} cy={y} r="3.5" fill="#4f6df5"><title>{item.label} {item.score}점</title></circle> })}
     </svg>
   )
 }
