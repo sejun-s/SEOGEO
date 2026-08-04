@@ -327,6 +327,8 @@ body { background: var(--v03-canvas); color: var(--v03-ink); }
 .v03-search-box, .v03-keyword-box { background: #fff !important; border-color: #dce6e9 !important; box-shadow: 0 16px 36px rgba(34,72,78,.08); }
 .v03-search-box { overflow: hidden; }
 .v03-search-box input { min-width: 0; }
+.v03-search-box:focus-within { border-color: var(--v03-teal) !important; box-shadow: 0 0 0 3px rgba(28,166,158,.12), 0 16px 36px rgba(34,72,78,.08); }
+.v03-search-box input:focus, .v03-search-box input:focus-visible { outline: none; box-shadow: none; }
 .v03-search-box .btn-purple { white-space: nowrap; min-width: 106px; }
 .v03-keyword-box { box-shadow: 0 8px 20px rgba(34,72,78,.04); }
 .v03-example-row { color: #788499; }
