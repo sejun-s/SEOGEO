@@ -512,7 +512,7 @@ export function App() {
                 {!showCompare && mainTab === 'ga4' && (
                   <div className="space-y-4 animate-fadeIn">
                     {/* GA4 서브탭 */}
-                    <div className="flex gap-1 p-1 rounded-xl bg-white/4 border border-white/8 w-fit">
+                    <div className="inline-flex gap-1 p-1 rounded-xl bg-slate-100 border border-slate-200 shadow-sm">
                       {([
                         { id: 'list', label: '분석 리스트' },
                         { id: 'account', label: '계정 입력' },
@@ -520,10 +520,10 @@ export function App() {
                         <button
                           key={id}
                           onClick={() => setGa4Tab(id)}
-                          className={`text-xs px-4 py-1.5 rounded-lg font-medium transition-all ${
+                          className={`min-w-24 text-xs px-4 py-2 rounded-lg font-bold transition-all ${
                             ga4Tab === id
-                              ? 'bg-white/12 text-white shadow-sm'
-                              : 'text-slate-500 hover:text-slate-300'
+                              ? 'bg-slate-900 text-white shadow-sm'
+                              : 'text-slate-600 hover:text-slate-900 hover:bg-white'
                           }`}
                         >
                           {label}
