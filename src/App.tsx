@@ -372,48 +372,6 @@ export function App() {
     });
   }, [selectedAudit]);
 
-  const handleToggleFixMetric = useCallback((metricId: string) => {
-    if (!selectedAudit) return;
-    setSelectedAudit((prev) => {
-      if (!prev) return prev;
-      const target = prev.metrics.find((m) => m.id === metricId);
-      if (!target) return prev;
-
-      const isNowResolved = !target.isResolved;
-      const boost = target.scoreBoost || 5;
-
-      const updatedMetrics = prev.metrics.map((m) =>
-        m.id === metricId
-          ? { ...m, isResolved: isNowResolved, status: (isNowResolved ? 'pass' : 'warning') as 'pass' | 'warning' }
-          : m
-      );
-
-      const newScore = Math.min(100, Math.max(prev.initialScore, prev.overallScore + (isNowResolved ? boost : -boost)));
-
-      const updated: AuditResult = {
-        ...prev,
-        overallScore: newScore,
-        technicalScore: Math.min(100, prev.technicalScore + (isNowResolved ? (target.category === 'technical' ? boost : 1) : -1)),
-        chatGptSearchScore: Math.min(100, prev.chatGptSearchScore + (isNowResolved ? (target.category === 'chatgpt' ? boost : 1) : -1)),
-        schemaScore: Math.min(100, prev.schemaScore + (isNowResolved ? (target.category === 'schema' ? boost : 1) : -1)),
-        metrics: updatedMetrics,
-        scoreHistory: [
-          {
-            id: `h_${Date.now()}`,
-            timestamp: new Date().toLocaleString('ko-KR'),
-            label: isNowResolved ? `[개선 적용] ${target.title}` : `[원복] ${target.title}`,
-            scoreDelta: isNowResolved ? boost : -boost,
-            newOverallScore: newScore,
-          },
-          ...prev.scoreHistory,
-        ],
-      };
-
-      setHistory((h) => h.map((a) => (a.url === updated.url ? updated : a)));
-      return updated;
-    });
-  }, [selectedAudit]);
-
   const showResults = selectedAudit !== null;
 
   return (
@@ -599,7 +557,6 @@ export function App() {
                     activeTab={activeDetailTab}
                     onSelectTab={setActiveDetailTab}
                     onBackToOverview={handleBackToOverview}
-                    onToggleFix={handleToggleFixMetric}
                     autoExpandId={highlightCriteriaId ?? undefined}
                   />
                 ) : (
