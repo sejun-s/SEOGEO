@@ -141,11 +141,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                   )}
 
+                  {!compareMode && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onSetMyCompany(isMyCompany ? null : audit.url); }}
+                      title={isMyCompany ? '우리 회사 해제' : '우리 회사로 설정'}
+                      aria-label={isMyCompany ? '우리 회사 해제' : '우리 회사로 설정'}
+                      className={`shrink-0 p-0.5 transition-all ${
+                        isMyCompany
+                          ? 'text-white opacity-100'
+                          : 'text-white/70 opacity-40 group-hover:opacity-100 hover:text-white'
+                      }`}
+                    >
+                      <Star className={`w-3.5 h-3.5 ${isMyCompany ? 'fill-white' : ''}`} />
+                    </button>
+                  )}
+
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1 min-w-0">
-                      {isMyCompany && (
-                        <Star className="w-3 h-3 fill-white text-white shrink-0" />
-                      )}
                       <span className="text-xs font-medium text-slate-200 truncate">{audit.title}</span>
                     </div>
                     <div className="text-[10px] text-slate-500 font-mono truncate mt-0.5">
@@ -153,34 +165,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1 shrink-0">
-                    <ScoreBadge score={audit.overallScore} />
+                  <div className="ml-auto flex items-center gap-1.5 shrink-0">
                     {!compareMode && (
-                      <>
-                        {/* Star button — always visible when starred, on hover otherwise */}
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onSetMyCompany(isMyCompany ? null : audit.url); }}
-                          title={isMyCompany ? '우리 회사 해제' : '우리 회사로 설정'}
-                          aria-label={isMyCompany ? '우리 회사 해제' : '우리 회사로 설정'}
-                          className={`p-0.5 transition-all ${
-                            isMyCompany
-                              ? 'text-white opacity-100'
-                              : 'opacity-0 group-hover:opacity-100 text-white/70 hover:text-white'
-                          }`}
-                        >
-                          <Star className={`w-3 h-3 ${isMyCompany ? 'fill-white' : ''}`} />
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onRemoveHistory(audit.url); }}
-                          title="분석 이력 삭제"
-                          aria-label="분석 이력 삭제"
-                          className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-rose-400 transition-all p-0.5"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                        <ChevronRight className="w-3 h-3 text-white/80" />
-                      </>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onRemoveHistory(audit.url); }}
+                        title="분석 이력 삭제"
+                        aria-label="분석 이력 삭제"
+                        className="opacity-0 group-hover:opacity-100 text-white/70 hover:text-white transition-all p-0.5"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
                     )}
+                    <ScoreBadge score={audit.overallScore} />
+                    {!compareMode && <ChevronRight className="w-3 h-3 text-white/80" />}
                   </div>
                 </div>
               );
