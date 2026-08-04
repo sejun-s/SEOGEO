@@ -272,6 +272,26 @@ export interface SiteCrawlIssue {
   count: number;
   urls: string[];
   recommendation: string;
+  scoreImpact: number;
+  verification: string;
+}
+
+export interface CrawlScoreFactor {
+  issueId: string;
+  label: string;
+  maxPenalty: number;
+  appliedPenalty: number;
+  affectedPages: number;
+  affectedRatio: number;
+}
+
+export interface SiteCrawlComparison {
+  previousHealthScore: number;
+  healthScoreDelta: number;
+  resolvedIssueIds: string[];
+  newIssueIds: string[];
+  improvedIssueIds: string[];
+  regressedIssueIds: string[];
 }
 
 export interface SiteCrawlResult {
@@ -284,8 +304,12 @@ export interface SiteCrawlResult {
   errorCount: number;
   warningCount: number;
   healthScore: number;
+  scoreModelVersion: string;
+  scoreFactors: CrawlScoreFactor[];
   truncated: boolean;
+  blockedByRobots: number;
   limits: { maxPages: number; maxDepth: number; concurrency: number };
   pages: CrawlPageResult[];
   issues: SiteCrawlIssue[];
+  comparison?: SiteCrawlComparison;
 }

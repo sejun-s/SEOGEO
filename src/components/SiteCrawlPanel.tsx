@@ -19,6 +19,7 @@ export function SiteCrawlPanel({ audit }: { audit: AuditResult }) {
             <Gauge className="w-4 h-4 text-cyan-400" /> 사이트 전체 Health
           </div>
           <p className="text-[11px] text-slate-500 mt-1">Sitemap과 내부 링크를 따라 탐색한 실측 결과입니다.</p>
+          <p className="text-[10px] text-slate-600 mt-1">점수 기준 {crawl.scoreModelVersion} · robots.txt 제외 {crawl.blockedByRobots}개</p>
         </div>
         <div className={`text-3xl font-black ${scoreColor}`}>{crawl.healthScore}</div>
       </div>
@@ -38,6 +39,15 @@ export function SiteCrawlPanel({ audit }: { audit: AuditResult }) {
       </div>
 
       <div className="p-5 space-y-2">
+        {crawl.comparison && (
+          <div className="mb-3 rounded-lg border border-cyan-500/15 bg-cyan-500/5 px-3 py-2 text-[11px] text-slate-400">
+            이전 검사 {crawl.comparison.previousHealthScore}점 대비{' '}
+            <span className={crawl.comparison.healthScoreDelta >= 0 ? 'text-emerald-400' : 'text-rose-400'}>
+              {crawl.comparison.healthScoreDelta >= 0 ? '+' : ''}{crawl.comparison.healthScoreDelta}점
+            </span>
+            {' '}· 해결 {crawl.comparison.resolvedIssueIds.length} · 신규 {crawl.comparison.newIssueIds.length}
+          </div>
+        )}
         {crawl.issues.length === 0 ? (
           <div className="text-xs text-emerald-400 flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> 주요 사이트 전체 오류를 찾지 못했습니다.</div>
         ) : crawl.issues.slice(0, 8).map(issue => (
@@ -48,9 +58,11 @@ export function SiteCrawlPanel({ audit }: { audit: AuditResult }) {
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-3">
                 <span className="text-xs font-semibold text-slate-200">{issue.title}</span>
-                <span className="text-[10px] font-mono text-slate-500">{issue.count}페이지</span>
+                <span className="text-[10px] font-mono text-slate-500">{issue.count}페이지{issue.scoreImpact > 0 ? ` · -${issue.scoreImpact}점` : ''}</span>
               </div>
               <p className="text-[11px] text-slate-500 mt-1">{issue.recommendation}</p>
+              <p className="text-[10px] text-slate-600 mt-1">확인: {issue.verification}</p>
+              {issue.urls[0] && <p className="text-[10px] text-slate-600 mt-1 font-mono truncate">예: {issue.urls[0]}</p>}
             </div>
           </div>
         ))}

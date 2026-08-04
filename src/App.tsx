@@ -10,6 +10,7 @@ import { AnalysisLog } from './components/AnalysisLog';
 import { SummaryReport } from './components/SummaryReport';
 import { FixChecklist } from './components/FixChecklist';
 import { analyzeUrl } from './lib/analyzeUrl';
+import { compareSiteCrawls } from './lib/siteCrawlComparison';
 import type { AnalysisEvent, PageSignals } from './types';
 import { Search, Sparkles, Zap, Loader2, ExternalLink, Tag, X, Plus, Globe, BarChart3, Lightbulb } from 'lucide-react';
 import { KeywordOptimizer } from './components/KeywordOptimizer';
@@ -299,19 +300,30 @@ export function App() {
         }
       });
 
+      const previousAudit = history.find((audit) => audit.url === result.url);
+      const enrichedResult: AuditResult = previousAudit?.siteCrawl && result.siteCrawl
+        ? {
+            ...result,
+            siteCrawl: {
+              ...result.siteCrawl,
+              comparison: compareSiteCrawls(previousAudit.siteCrawl, result.siteCrawl),
+            },
+          }
+        : result;
+
       setHistory((prev) => {
-        const filtered = prev.filter((a) => a.url !== url);
-        return [result, ...filtered].slice(0, 20);
+        const filtered = prev.filter((a) => a.url !== enrichedResult.url);
+        return [enrichedResult, ...filtered].slice(0, 20);
       });
-      setSelectedAudit(result);
-      setAnalysisSignals(result.pageSignals ?? null);
+      setSelectedAudit(enrichedResult);
+      setAnalysisSignals(enrichedResult.pageSignals ?? null);
       setViewMode('overview');
     } catch (err) {
       setScanError(String(err));
     } finally {
       setIsScanning(false);
     }
-  }, []);
+  }, [history]);
 
   const handleAddKeyword = useCallback((kw: string) => {
     setKeywords((prev) => prev.includes(kw) ? prev : [...prev, kw].slice(0, 10));

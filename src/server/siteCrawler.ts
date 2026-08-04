@@ -1,4 +1,4 @@
-import type { CrawlPageResult, SiteCrawlIssue, SiteCrawlResult } from '../types.ts'
+import type { CrawlPageResult, CrawlScoreFactor, SiteCrawlIssue, SiteCrawlResult } from '../types.ts'
 
 export interface SiteCrawlerOptions {
   maxPages?: number
@@ -27,7 +27,7 @@ function extractFirst(html: string, pattern: RegExp): string {
   return textFromHtml(html.match(pattern)?.[1] ?? '')
 }
 
-function normalizeUrl(value: string, base: URL): string | null {
+export function normalizeUrl(value: string, base: URL): string | null {
   try {
     const url = new URL(decodeEntities(value), base)
     if (!['http:', 'https:'].includes(url.protocol) || url.origin !== base.origin) return null
@@ -40,6 +40,61 @@ function normalizeUrl(value: string, base: URL): string | null {
     return url.toString()
   } catch {
     return null
+  }
+}
+
+interface RobotsRule {
+  allow: boolean
+  pattern: string
+}
+
+function patternMatches(path: string, pattern: string): boolean {
+  if (!pattern) return false
+  const endAnchored = pattern.endsWith('$')
+  const source = pattern.replace(/\$$/, '').replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')
+  return new RegExp(`^${source}${endAnchored ? '$' : ''}`).test(path)
+}
+
+export function createRobotsPolicy(robotsText: string, crawlerName = 'seogeo-crawler'): (url: string) => boolean {
+  const groups: Array<{ agents: string[]; rules: RobotsRule[] }> = []
+  let current: { agents: string[]; rules: RobotsRule[] } | null = null
+
+  for (const rawLine of robotsText.split(/\r?\n/)) {
+    const line = rawLine.replace(/#.*$/, '').trim()
+    if (!line) continue
+    const separator = line.indexOf(':')
+    if (separator < 0) continue
+    const field = line.slice(0, separator).trim().toLowerCase()
+    const value = line.slice(separator + 1).trim()
+
+    if (field === 'user-agent') {
+      if (!current || current.rules.length > 0) {
+        current = { agents: [], rules: [] }
+        groups.push(current)
+      }
+      current.agents.push(value.toLowerCase())
+    } else if ((field === 'allow' || field === 'disallow') && current) {
+      if (field === 'disallow' && !value) continue
+      current.rules.push({ allow: field === 'allow', pattern: value })
+    }
+  }
+
+  const normalizedCrawler = crawlerName.toLowerCase()
+  const matchingGroups = groups.filter(group => group.agents.some(agent => agent === '*' || normalizedCrawler.startsWith(agent)))
+  const specificLength = Math.max(0, ...matchingGroups.flatMap(group => group.agents.filter(agent => agent !== '*' && normalizedCrawler.startsWith(agent)).map(agent => agent.length)))
+  const selectedGroups = specificLength > 0
+    ? matchingGroups.filter(group => group.agents.some(agent => agent !== '*' && agent.length === specificLength && normalizedCrawler.startsWith(agent)))
+    : matchingGroups.filter(group => group.agents.includes('*'))
+  const rules = selectedGroups.flatMap(group => group.rules)
+
+  return (urlValue: string) => {
+    if (!rules.length) return true
+    const url = new URL(urlValue)
+    const path = `${url.pathname}${url.search}`
+    const matches = rules.filter(rule => patternMatches(path, rule.pattern))
+    if (!matches.length) return true
+    matches.sort((a, b) => b.pattern.replace(/\$$/, '').length - a.pattern.replace(/\$$/, '').length || Number(b.allow) - Number(a.allow))
+    return matches[0].allow
   }
 }
 
@@ -150,11 +205,34 @@ async function inspectPage(url: string, depth: number, origin: URL, timeoutMs: n
   }
 }
 
+const SCORE_RULES = new Map<string, { maxPenalty: number; verification: string }>([
+  ['http_error', { maxPenalty: 35, verification: 'URL을 다시 요청해 2xx 응답인지 확인' }],
+  ['missing_title', { maxPenalty: 20, verification: 'HTML <title>이 존재하고 페이지별로 고유한지 확인' }],
+  ['duplicate_title', { maxPenalty: 15, verification: '영향 URL의 <title> 값을 서로 비교' }],
+  ['redirect', { maxPenalty: 8, verification: '내부 링크가 리다이렉트 없이 최종 URL로 연결되는지 확인' }],
+  ['missing_description', { maxPenalty: 8, verification: 'HTML meta[name="description"] 존재 여부 확인' }],
+  ['duplicate_description', { maxPenalty: 5, verification: '영향 URL의 meta description 값을 서로 비교' }],
+  ['invalid_h1', { maxPenalty: 8, verification: '렌더링된 페이지에 대표 H1이 하나인지 확인' }],
+  ['missing_canonical', { maxPenalty: 6, verification: 'HTML link[rel="canonical"] 존재 여부 확인' }],
+  ['slow_response', { maxPenalty: 5, verification: '동일 URL을 재측정하고 PageSpeed Insights로 교차 확인' }],
+])
+
 function buildIssues(pages: CrawlPageResult[]): SiteCrawlIssue[] {
   const issues: SiteCrawlIssue[] = []
   const addIssue = (id: string, severity: SiteCrawlIssue['severity'], title: string, affected: CrawlPageResult[], recommendation: string) => {
     if (!affected.length) return
-    issues.push({ id, severity, title, count: affected.length, urls: affected.slice(0, 10).map(page => page.url), recommendation })
+    const rule = SCORE_RULES.get(id)
+    const scoreImpact = rule ? Math.round(rule.maxPenalty * (affected.length / Math.max(1, pages.length)) * 10) / 10 : 0
+    issues.push({
+      id,
+      severity,
+      title,
+      count: affected.length,
+      urls: affected.slice(0, 10).map(page => page.url),
+      recommendation,
+      scoreImpact,
+      verification: rule?.verification ?? '수정 후 사이트를 다시 분석해 상태를 확인',
+    })
   }
 
   addIssue('http_error', 'error', '접근할 수 없는 페이지', pages.filter(page => page.statusCode === 0 || page.statusCode >= 400), '깨진 내부 링크와 서버 응답 상태를 확인하세요.')
@@ -174,19 +252,34 @@ function buildIssues(pages: CrawlPageResult[]): SiteCrawlIssue[] {
   const duplicateTitlePages = [...titleGroups.values()].filter(group => group.length > 1).flat()
   addIssue('duplicate_title', 'error', 'Title이 중복된 페이지', duplicateTitlePages, '페이지마다 검색 의도에 맞는 고유한 Title을 사용하세요.')
 
+  const descriptionGroups = new Map<string, CrawlPageResult[]>()
+  for (const page of pages.filter(item => item.metaDescription)) {
+    const key = page.metaDescription.trim().toLowerCase()
+    descriptionGroups.set(key, [...(descriptionGroups.get(key) ?? []), page])
+  }
+  const duplicateDescriptions = [...descriptionGroups.values()].filter(group => group.length > 1).flat()
+  addIssue('duplicate_description', 'warning', 'Meta Description이 중복된 페이지', duplicateDescriptions, '페이지마다 검색 의도와 내용을 반영한 고유한 설명을 작성하세요.')
+
   return issues.sort((a, b) => ({ error: 0, warning: 1, notice: 2 }[a.severity] - ({ error: 0, warning: 1, notice: 2 }[b.severity]) || b.count - a.count))
 }
 
-function calculateHealthScore(pages: CrawlPageResult[], issues: SiteCrawlIssue[]): number {
-  if (!pages.length) return 0
-  const penalties = new Map<string, number>([
-    ['http_error', 35], ['missing_title', 20], ['duplicate_title', 15],
-    ['redirect', 8], ['missing_description', 8], ['invalid_h1', 8],
-    ['missing_canonical', 6], ['slow_response', 5],
-  ])
-  let totalPenalty = 0
-  for (const issue of issues) totalPenalty += (penalties.get(issue.id) ?? 0) * (issue.count / pages.length)
-  return Math.max(0, Math.round(100 - Math.min(100, totalPenalty)))
+export function calculateHealthScore(pages: CrawlPageResult[], issues: SiteCrawlIssue[]): { score: number; factors: CrawlScoreFactor[] } {
+  if (!pages.length) return { score: 0, factors: [] }
+  const factors = issues.flatMap((issue): CrawlScoreFactor[] => {
+    const rule = SCORE_RULES.get(issue.id)
+    if (!rule) return []
+    const affectedRatio = issue.count / pages.length
+    return [{
+      issueId: issue.id,
+      label: issue.title,
+      maxPenalty: rule.maxPenalty,
+      appliedPenalty: Math.round(rule.maxPenalty * affectedRatio * 10) / 10,
+      affectedPages: issue.count,
+      affectedRatio: Math.round(affectedRatio * 1000) / 1000,
+    }]
+  })
+  const totalPenalty = factors.reduce((sum, factor) => sum + factor.appliedPenalty, 0)
+  return { score: Math.max(0, Math.round(100 - Math.min(100, totalPenalty))), factors }
 }
 
 export async function crawlSite(targetUrl: string, inputOptions: SiteCrawlerOptions = {}): Promise<SiteCrawlResult> {
@@ -209,9 +302,17 @@ export async function crawlSite(targetUrl: string, inputOptions: SiteCrawlerOpti
     // Continue when robots.txt is missing or inaccessible.
   }
 
+  const isAllowedByRobots = createRobotsPolicy(robotsText)
+
   const sitemapUrls = await discoverSitemapUrls(origin, robotsText, options)
-  const queue: Array<{ url: string; depth: number }> = [{ url: normalizedTarget, depth: 0 }]
-  for (const url of sitemapUrls) queue.push({ url, depth: 1 })
+  const queue: Array<{ url: string; depth: number }> = []
+  let blockedByRobots = 0
+  if (isAllowedByRobots(normalizedTarget)) queue.push({ url: normalizedTarget, depth: 0 })
+  else blockedByRobots += 1
+  for (const url of sitemapUrls) {
+    if (isAllowedByRobots(url)) queue.push({ url, depth: 1 })
+    else blockedByRobots += 1
+  }
 
   const queued = new Set(queue.map(item => item.url))
   const visited = new Set<string>()
@@ -222,6 +323,10 @@ export async function crawlSite(targetUrl: string, inputOptions: SiteCrawlerOpti
     while (queue.length && batch.length < options.concurrency && pages.length + batch.length < options.maxPages) {
       const item = queue.shift()!
       if (visited.has(item.url)) continue
+      if (item.depth > 0 && !isAllowedByRobots(item.url)) {
+        blockedByRobots += 1
+        continue
+      }
       visited.add(item.url)
       batch.push(item)
     }
@@ -233,6 +338,11 @@ export async function crawlSite(targetUrl: string, inputOptions: SiteCrawlerOpti
       if (page.depth >= options.maxDepth) continue
       for (const link of page.internalLinks) {
         if (queued.has(link) || visited.has(link)) continue
+        if (!isAllowedByRobots(link)) {
+          blockedByRobots += 1
+          queued.add(link)
+          continue
+        }
         queued.add(link)
         queue.push({ url: link, depth: page.depth + 1 })
       }
@@ -254,6 +364,7 @@ export async function crawlSite(targetUrl: string, inputOptions: SiteCrawlerOpti
     && !duplicateTitles.has(page.url)
   const errorCount = issues.filter(issue => issue.severity === 'error').reduce((sum, issue) => sum + issue.count, 0)
   const warningCount = issues.filter(issue => issue.severity === 'warning').reduce((sum, issue) => sum + issue.count, 0)
+  const scoreResult = calculateHealthScore(pages, issues)
 
   return {
     startedAt: new Date(startedAt).toISOString(),
@@ -264,8 +375,11 @@ export async function crawlSite(targetUrl: string, inputOptions: SiteCrawlerOpti
     healthyPages: pages.filter(isHealthy).length,
     errorCount,
     warningCount,
-    healthScore: calculateHealthScore(pages, issues),
+    healthScore: scoreResult.score,
+    scoreModelVersion: 'site-health-v0.2.0',
+    scoreFactors: scoreResult.factors,
     truncated: queue.length > 0 || Date.now() >= deadline,
+    blockedByRobots,
     limits: { maxPages: options.maxPages, maxDepth: options.maxDepth, concurrency: options.concurrency },
     pages: pages.map(page => ({ ...page, internalLinks: [] })),
     issues,
