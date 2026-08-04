@@ -21,15 +21,15 @@ function CodeSnippet({ code, codeType }: { code: string; codeType?: string }) {
   });
   const label = codeType === 'robots' ? 'robots.txt' : codeType === 'json' ? 'JSON-LD' : 'HTML';
   return (
-    <div className="mt-2 rounded-lg overflow-hidden border border-white/8">
-      <div className="flex items-center justify-between px-2.5 py-1.5 bg-slate-900/80 border-b border-white/6">
-        <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider">{label}</span>
-        <button onClick={copy} className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-white/8 hover:bg-white/14 text-slate-400 hover:text-white transition-all">
+    <div className="mt-2 rounded-lg overflow-hidden border border-slate-300 bg-white shadow-sm">
+      <div className="flex items-center justify-between px-3 py-2 bg-slate-100 border-b border-slate-300">
+        <span className="text-[10px] font-mono font-semibold text-slate-700 uppercase tracking-wider">{label} — 복사 후 붙여넣기</span>
+        <button onClick={copy} className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-md bg-white border border-slate-300 text-slate-700 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-800 transition-all">
           {copied ? <Check className="w-2.5 h-2.5 text-emerald-400" /> : <Copy className="w-2.5 h-2.5" />}
           {copied ? '복사됨' : '복사'}
         </button>
       </div>
-      <pre className="p-3 text-[10px] font-mono text-slate-400 overflow-x-auto whitespace-pre-wrap leading-relaxed bg-slate-950/50">
+      <pre className="p-4 text-[12px] font-mono text-slate-900 overflow-x-auto whitespace-pre-wrap leading-6 bg-white selection:bg-blue-200">
         {code}
       </pre>
     </div>
