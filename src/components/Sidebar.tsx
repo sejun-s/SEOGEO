@@ -21,8 +21,8 @@ interface SidebarProps {
 
 function ScoreBadge({ score }: { score: number }) {
   return (
-    <span className="sidebar-score-badge text-[11px] font-mono font-extrabold px-2.5 py-1 rounded-full border">
-      {score}
+    <span title={`종합 점수 ${score}점 / 100점`} aria-label={`종합 점수 ${score}점`} className="sidebar-score-badge text-[11px] font-mono font-extrabold px-2.5 py-1 rounded-full border whitespace-nowrap">
+      {score}점
     </span>
   );
 }
