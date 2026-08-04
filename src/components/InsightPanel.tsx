@@ -157,6 +157,8 @@ export const InsightPanel: React.FC<Props> = ({ audit }) => {
   const [cache, setCache] = useState<Cache>({})
   const [errors, setErrors] = useState<Errors>({})
   const [ctx, setCtx] = useState<SiteContext>({ description: '', purpose: [], targetAudience: '' })
+  const [descriptionDraft, setDescriptionDraft] = useState('')
+  const [targetAudienceDraft, setTargetAudienceDraft] = useState('')
   const [ctxDirty, setCtxDirty] = useState(false) // context changed since last generation
 
   // Load saved context when audit changes
@@ -165,7 +167,10 @@ export const InsightPanel: React.FC<Props> = ({ audit }) => {
     setCache({})
     setErrors({})
     setSelected('marketer')
-    setCtx(loadCtx(audit.url))
+    const saved = loadCtx(audit.url)
+    setCtx(saved)
+    setDescriptionDraft(saved.description)
+    setTargetAudienceDraft(saved.targetAudience)
     setCtxDirty(false)
   }, [audit])
 
@@ -213,6 +218,25 @@ export const InsightPanel: React.FC<Props> = ({ audit }) => {
       ? ctx.purpose.filter(x => x !== p)
       : [...ctx.purpose, p]
     updateCtx({ purpose: next })
+  }
+
+  const commitDraft = (field: 'description' | 'targetAudience') => {
+    if (field === 'description') {
+      const value = descriptionDraft.trim()
+      setDescriptionDraft(value)
+      if (value !== ctx.description) updateCtx({ description: value })
+    }
+    if (field === 'targetAudience') {
+      const value = targetAudienceDraft.trim()
+      setTargetAudienceDraft(value)
+      if (value !== ctx.targetAudience) updateCtx({ targetAudience: value })
+    }
+  }
+
+  const commitOnEnter = (event: React.KeyboardEvent<HTMLTextAreaElement | HTMLInputElement>, field: 'description' | 'targetAudience') => {
+    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
+    event.preventDefault()
+    commitDraft(field)
   }
 
   if (!audit) {
@@ -263,10 +287,11 @@ export const InsightPanel: React.FC<Props> = ({ audit }) => {
 
         {/* Description */}
         <div className="space-y-1.5">
-          <label className="text-[11px] text-slate-500 font-medium">사이트 소개</label>
+          <div className="flex items-center justify-between"><label className="text-[11px] text-slate-500 font-medium">사이트 소개</label><span className="text-[9px] text-slate-500">Enter로 적용 · Shift+Enter 줄바꿈</span></div>
           <textarea
-            value={ctx.description}
-            onChange={e => updateCtx({ description: e.target.value })}
+            value={descriptionDraft}
+            onChange={e => setDescriptionDraft(e.target.value)}
+            onKeyDown={e => commitOnEnter(e, 'description')}
             placeholder="예: 중소기업 대상 ERP SaaS 솔루션을 제공하는 B2B 서비스입니다"
             rows={2}
             className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-500/40 focus:bg-white/8 resize-none transition-all"
@@ -295,11 +320,12 @@ export const InsightPanel: React.FC<Props> = ({ audit }) => {
 
         {/* Target audience */}
         <div className="space-y-1.5">
-          <label className="text-[11px] text-slate-500 font-medium">타겟 고객</label>
+          <div className="flex items-center justify-between"><label className="text-[11px] text-slate-500 font-medium">타겟 고객</label><span className="text-[9px] text-slate-500">Enter로 적용</span></div>
           <input
             type="text"
-            value={ctx.targetAudience}
-            onChange={e => updateCtx({ targetAudience: e.target.value })}
+            value={targetAudienceDraft}
+            onChange={e => setTargetAudienceDraft(e.target.value)}
+            onKeyDown={e => commitOnEnter(e, 'targetAudience')}
             placeholder="예: 50인 이상 중소기업 재무/IT 담당자"
             className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-500/40 focus:bg-white/8 transition-all"
           />

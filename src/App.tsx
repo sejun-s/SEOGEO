@@ -19,6 +19,7 @@ import { InsightPanel } from './components/InsightPanel';
 import { CompareView } from './components/CompareView';
 import { AnalysisProgress } from './components/AnalysisProgress';
 import { MobileNav } from './components/MobileNav';
+import { ReportActions } from './components/ReportActions';
 
 const HISTORY_KEY = 'seo-analyzer-history';
 
@@ -553,6 +554,7 @@ export function App() {
 
                 {/* URL 분석 탭 */}
                 {!showCompare && mainTab === 'seo' && (<>
+                <ReportActions audit={selectedAudit} />
                 <ScoreOverview audit={selectedAudit} />
                 <SiteCrawlPanel audit={selectedAudit} />
 

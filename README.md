@@ -1,4 +1,4 @@
-# SEOGEO v0.3
+# SEOGEO v0.4
 
 웹사이트의 기술 SEO, AI 검색 노출 준비도, GEO, E-E-A-T, Schema.org, Bing/AEO 요소를 한 번에 점검하는 React 기반 분석 도구입니다.
 

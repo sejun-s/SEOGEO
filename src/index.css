@@ -347,6 +347,15 @@ body { background: #e8edf7; color: var(--v03-ink); letter-spacing: -.012em; }
 
 .v03-mobile-nav { display: none; }
 
+.v04-report-bar { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:16px 18px; border:1px solid #dfe5f5; border-radius:20px 20px 20px 8px; background:linear-gradient(100deg,#f2f5ff,#fff); box-shadow:0 10px 28px rgba(48,60,126,.06); }
+.v04-report-bar > div:first-child > span { display:flex; align-items:center; gap:7px; color:var(--v03-ink); font-size:13px; font-weight:800; }
+.v04-report-bar > div:first-child > span svg { color:var(--v03-teal); }
+.v04-report-bar p { color:#7a849e; font-size:10px; margin:3px 0 0; }
+.v04-report-actions { display:flex; gap:8px; }
+.v04-report-actions button { min-height:40px; display:flex; align-items:center; gap:6px; border-radius:999px; padding:0 14px; border:1px solid #d7def3; color:#536184; background:#fff; font-size:11px; font-weight:750; cursor:pointer; }
+.v04-report-actions button:first-child { border-color:var(--v03-teal); color:#fff; background:var(--v03-teal); box-shadow:0 8px 18px rgba(79,109,245,.18); }
+.v04-report-actions button:hover { transform:translateY(-1px); }
+
 *:focus-visible { outline: 2px solid var(--v03-teal); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; } }
 
@@ -381,6 +390,9 @@ body { background: #e8edf7; color: var(--v03-ink); letter-spacing: -.012em; }
   .v03-action-banner button { width: 100%; justify-content: center; }
   .v03-progress-steps { grid-template-columns: 1fr 1fr; }
   .v03-mobile-nav { position: fixed; bottom: 0; left: 0; right: 0; z-index: 45; height: 66px; display: grid; grid-template-columns: repeat(4,1fr); background: rgba(255,255,255,.96); border-top: 1px solid var(--v03-line); backdrop-filter: blur(14px); }
+  .v04-report-bar { align-items:flex-start; flex-direction:column; }
+  .v04-report-actions { width:100%; }
+  .v04-report-actions button { flex:1; justify-content:center; }
   .v03-mobile-nav button { border: 0; background: transparent; color: #8994a5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; font-size: 9px; }
   .v03-mobile-nav button.active { color: var(--v03-teal); }
 }
