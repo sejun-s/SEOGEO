@@ -16,7 +16,7 @@ export default defineConfig({
       name: 'seo-analyzer-api',
       configureServer(server: ViteDevServer) {
         // OWASP Security Headers Middleware
-        server.middlewares.use((req, res, next) => {
+        server.middlewares.use((_req, res, next) => {
           res.setHeader('X-Content-Type-Options', 'nosniff')
           res.setHeader('X-Frame-Options', 'DENY')
           res.setHeader('X-XSS-Protection', '1; mode=block')
@@ -100,13 +100,13 @@ export default defineConfig({
         })
 
         // Admin Health API
-        server.middlewares.use('/api/admin/system-health', (req: IncomingMessage, res: ServerResponse) => {
+        server.middlewares.use('/api/admin/system-health', (_req: IncomingMessage, res: ServerResponse) => {
           res.writeHead(200, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify(adminTelemetry.getHealthMetrics()))
         })
 
         // Admin Runs API
-        server.middlewares.use('/api/admin/analysis-runs', (req: IncomingMessage, res: ServerResponse) => {
+        server.middlewares.use('/api/admin/analysis-runs', (_req: IncomingMessage, res: ServerResponse) => {
           res.writeHead(200, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify(adminTelemetry.getRuns(50)))
         })

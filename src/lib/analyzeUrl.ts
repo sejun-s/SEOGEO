@@ -1,4 +1,9 @@
-import type { AIAnalysisResponse, AuditResult, AnalysisEvent, PageSignals } from '../types';
+import type {
+  AIAnalysisResponse,
+  AnalysisEvent,
+  AuditResult,
+  PageSignals,
+} from '../types';
 import { generateCustomAudit } from '../data/mockPresets';
 import { calcCategoryScore } from '../server/seoAnalyze';
 
@@ -132,7 +137,7 @@ function mapAIResponseToAudit(url: string, ai: AIAnalysisResponse, signals?: Pag
         seoFoundationScore: v3.seoFoundationScore as number,
         aiCitationReadinessScore: v3.aiCitationReadinessScore as number,
         measurementConfidence: v3.measurementConfidence,
-        schemaEvaluationLevel: v3.schemaEvaluationLevel as any,
+        schemaEvaluationLevel: v3.schemaEvaluationLevel,
         ruleResults: (ai as any).ruleResults,
       }
     })() : {}),

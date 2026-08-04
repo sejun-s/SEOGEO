@@ -1,5 +1,3 @@
-import { URL } from 'url'
-
 export interface UrlSecurityResult {
   safe: boolean
   errorCode?: 'INVALID_URL' | 'BLOCKED_TARGET' | 'UNSUPPORTED_PROTOCOL' | 'BLOCKED_PORT' | 'RATE_LIMITED'

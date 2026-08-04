@@ -1,32 +1,54 @@
-# React + TypeScript + Vite
+# SEOGEO v0.2
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+웹사이트의 기술 SEO, AI 검색 노출 준비도, GEO, E-E-A-T, Schema.org, Bing/AEO 요소를 한 번에 점검하는 React 기반 분석 도구입니다.
 
-Currently, two official plugins are available:
+## 주요 기능
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- URL을 직접 수집해 SEO 신호 분석
+- 규칙 기반 점수와 선택적 Gemini 분석
+- 사이트별 점수 비교와 개선 체크리스트
+- 키워드 및 메타 태그 최적화 도우미
+- robots.txt, 구조화 데이터, 분석 도구 설치 여부 확인
+- SSRF 방어와 기본 요청 제한
 
-## React Compiler
+## 실행 방법
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Node.js 20 이상을 권장합니다.
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+기본 개발 주소는 `http://localhost:5173`입니다.
+
+## 환경 변수
+
+Gemini 분석은 선택 기능입니다. 키가 없으면 규칙 기반 분석만 실행합니다.
+
+```env
+GEMINI_API_KEY=your_api_key
+```
+
+운영 환경에서는 API 키를 브라우저에 저장하거나 입력받기보다 서버 환경 변수로만 관리하는 것을 권장합니다.
+
+## 품질 확인
+
+```bash
+npm run check
+```
+
+이 명령은 린트와 TypeScript 프로덕션 빌드를 차례로 실행합니다.
+
+## 배포
+
+`vercel.json`과 `/api` 서버리스 함수를 포함하고 있어 Vercel 배포를 기본 대상으로 합니다. 배포 환경에 `GEMINI_API_KEY`를 등록하면 AI 분석을 사용할 수 있습니다.
+
+## 주의사항
+
+- 점수는 검색엔진의 공식 순위 점수가 아니라 측정 가능한 신호를 바탕으로 한 진단 지표입니다.
+- JavaScript 렌더링 이후에만 나타나는 콘텐츠는 일부 누락될 수 있습니다.
+- 외부 사이트의 차단 정책이나 네트워크 상태에 따라 수집 결과가 달라질 수 있습니다.
+- 실제 검색 노출을 보장하지 않으며 개선 우선순위를 정하는 참고 자료로 사용해야 합니다.
+
+향후 개선 계획은 [docs/V0.2-IMPROVEMENT-PLAN.md](docs/V0.2-IMPROVEMENT-PLAN.md)를 참고하세요.

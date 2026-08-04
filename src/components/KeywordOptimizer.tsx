@@ -58,7 +58,7 @@ function CopyBlock({ code }: { code: string }) {
 
 export const KeywordOptimizer: React.FC<Props> = ({ audit, keywords, onAddKeyword, onRemoveKeyword }) => {
   const [input, setInput] = useState('');
-  const signals = audit.pageSignals ?? null;
+  const signals = audit.pageSignals;
 
   const commit = () => {
     const trimmed = input.trim().replace(/,$/, '');

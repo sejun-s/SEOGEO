@@ -1,4 +1,10 @@
-import type { PageSignals, SearchEligibilityResult, MeasurementConfidence } from '../types'
+import type {
+  CriteriaItem,
+  MeasurementConfidence,
+  PageSignals,
+  SchemaEvaluationLevel,
+  SearchEligibilityResult,
+} from '../types.ts'
 
 export type { PageSignals }
 
@@ -75,6 +81,8 @@ export async function fetchPageSignals(targetUrl: string, emit?: EmitFn): Promis
       jsonLdRaw: [], robotsTxt, hasViewport: false, hasCharset: false,
       wordCount: 0, internalLinks: 0, externalLinks: 0,
       imageCount: 0, imagesWithAlt: 0, hasSchema: false, hasHreflang: false, hasSitemap,
+      hasGA4: false, hasGTM: false, hasUALegacy: false,
+      hasFbPixel: false, hasNaverAnalytics: false,
     }
   }
 
@@ -349,7 +357,22 @@ export function calcAiCitationReadiness(s: PageSignals): number {
 
 // ─── 실측 기반 점수 계산 (v2 — Block 3/4 기준 적용) ─────────────────────────
 
-export function calcCategoryScore(s: PageSignals): Record<string, number | string | object> {
+export interface CategoryScores {
+  technicalScore: number
+  chatGptSearchScore: number
+  schemaScore: number
+  eeatScore: number
+  academicGeoScore: number
+  bingScore: number
+  seoFoundationScore: number
+  aiCitationReadinessScore: number
+  searchEligibility: SearchEligibilityResult
+  measurementConfidence: MeasurementConfidence
+  schemaEvaluationLevel: SchemaEvaluationLevel
+  scoreModelVersion: string
+}
+
+export function calcCategoryScore(s: PageSignals): CategoryScores {
   let tech = 0
   if (s.isHttps)                                              tech += 15
   if (s.statusCode === 200)                                   tech += 10
@@ -468,7 +491,7 @@ export function calcCategoryScore(s: PageSignals): Record<string, number | strin
 
 // ─── 규칙 기반 분석 결과 생성 (API 키 불필요) ───────────────────────────────
 
-export function generateRuleBasedResult(signals: PageSignals, scores: Record<string, number>): Record<string, unknown> {
+export function generateRuleBasedResult(signals: PageSignals, scores: CategoryScores): Record<string, unknown> {
   const overall = Math.round(
     scores.technicalScore     * 0.20 +
     scores.chatGptSearchScore * 0.18 +
@@ -479,14 +502,6 @@ export function generateRuleBasedResult(signals: PageSignals, scores: Record<str
   )
   const domain = signals.url.replace(/^https?:\/\//, '').split('/')[0]
   const rb = signals.robotsTxt.toLowerCase()
-
-  type CriteriaItem = {
-    id: string; name: string; category: string;
-    score: number; status: string; weight: string;
-    scoringBasis: string; evaluationCriteria: string;
-    currentState: string; improvement: string;
-    priority: string; estimatedScoreGain: number; referenceGuide: string;
-  }
 
   const criteria: CriteriaItem[] = []
 

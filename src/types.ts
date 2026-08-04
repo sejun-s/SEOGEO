@@ -18,7 +18,7 @@ export interface BotPermissionPolicy {
 export interface MetricItem {
   id: string;
   title: string;
-  category: 'technical' | 'chatgpt' | 'geo' | 'eeat' | 'schema' | 'bing';
+  category: 'technical' | 'chatgpt' | 'geo' | 'eeat' | 'schema' | 'bing' | 'analytics';
   status: 'pass' | 'warning' | 'fail';
   score: number;
   scoreBoost: number;
@@ -41,10 +41,10 @@ export interface ScoreHistoryEntry {
 export interface CriteriaItem {
   id: string;
   name: string;
-  category: 'technical' | 'chatgpt' | 'geo' | 'eeat' | 'schema' | 'bing';
+  category: 'technical' | 'chatgpt' | 'geo' | 'eeat' | 'schema' | 'bing' | 'analytics';
   score: number;
   status: 'pass' | 'warning' | 'fail';
-  weight: '높음' | '중간' | '낮음';
+  weight: '높음' | '중간' | '낮음' | '참고 (SEO 점수 미영향)';
   scoringBasis: string;         // 점수 근거
   evaluationCriteria: string;   // 평가 기준
   currentState: string;         // 현재 상태

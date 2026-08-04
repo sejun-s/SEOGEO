@@ -118,7 +118,7 @@ export const CompareView: React.FC<Props> = ({ audits, onClose, myCompanyUrl }) 
                 {audits.map((audit, i) => {
                   const score = scores[i];
                   const isMe = audit.url === myCompanyUrl;
-                  let barColor = color;
+                  let barColor: string = color;
                   if (isMyCompanyMode && !isMe && myScore !== null) {
                     barColor = score > myScore ? 'bg-rose-500' : score < myScore ? 'bg-emerald-600' : 'bg-white/20';
                   } else if (isMyCompanyMode && isMe) {
