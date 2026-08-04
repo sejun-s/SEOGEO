@@ -1,0 +1,247 @@
+export interface GeoFactorMetric {
+  name: string;
+  score: number;
+  status: 'excellent' | 'moderate' | 'needs_improvement';
+  description: string;
+  arxivReference: string;
+  actionItem: string;
+}
+
+export interface BotPermissionPolicy {
+  botName: string;
+  purpose: string;
+  status: 'allowed' | 'blocked' | 'missing';
+  impact: string;
+  recommendation: string;
+}
+
+export interface MetricItem {
+  id: string;
+  title: string;
+  category: 'technical' | 'chatgpt' | 'geo' | 'eeat' | 'schema' | 'bing';
+  status: 'pass' | 'warning' | 'fail';
+  score: number;
+  scoreBoost: number;
+  isResolved?: boolean;
+  currentValue: string;
+  recommendation: string;
+  codeSnippet?: string;
+  referenceDoc?: string;
+}
+
+export interface ScoreHistoryEntry {
+  id: string;
+  timestamp: string;
+  label: string;
+  scoreDelta: number;
+  newOverallScore: number;
+}
+
+// AI 분석 기준 아이템
+export interface CriteriaItem {
+  id: string;
+  name: string;
+  category: 'technical' | 'chatgpt' | 'geo' | 'eeat' | 'schema' | 'bing';
+  score: number;
+  status: 'pass' | 'warning' | 'fail';
+  weight: '높음' | '중간' | '낮음';
+  scoringBasis: string;         // 점수 근거
+  evaluationCriteria: string;   // 평가 기준
+  currentState: string;         // 현재 상태
+  improvement: string;          // 개선 방안
+  priority: 'critical' | 'high' | 'medium' | 'low';
+  estimatedScoreGain: number;   // 개선 시 예상 점수 상승
+  referenceGuide: string;       // 참고 가이드
+  codeSnippet?: string;         // 복붙 가능한 코드
+  codeType?: 'html' | 'robots' | 'json'; // 코드 종류
+}
+
+// Schema.org 평가 레벨 (v3)
+export type SchemaEvaluationLevel =
+  | 'not_applicable'
+  | 'missing'
+  | 'parse_error'
+  | 'valid_but_mismatched'
+  | 'valid_but_incomplete'
+  | 'appropriate_and_consistent'
+  | 'validated_for_supported_feature';
+
+// 단일 원천 검사 객체 (Single Source of Truth - RuleResult)
+export interface RuleResult {
+  ruleId: string;
+  ruleVersion: string;
+  title: string;
+  category: 'technical' | 'chatgpt' | 'geo' | 'eeat' | 'schema' | 'bing' | 'analytics';
+  status: 'pass' | 'warning' | 'fail' | 'unknown' | 'not_applicable';
+  severity: 'critical' | 'high' | 'medium' | 'low';
+  applicable: boolean;
+  observedValue: string;
+  rawEvidence: string;
+  evidenceType: 'official_requirement' | 'official_recommendation' | 'web_standard' | 'research_evidence' | 'product_heuristic';
+  sourceUrl?: string;
+  scoreEffect: string;
+  recommendation: string;
+  verificationMethod: string;
+  limitations: string;
+  codeSnippet?: string;
+  codeType?: 'html' | 'robots' | 'json';
+}
+
+// Block 4: 설명 가능한 점수 모델 (v2/v3)
+export type SearchEligibility = 'pass' | 'warning' | 'fail' | 'unknown'
+export type MeasurementConfidence = 'low' | 'medium' | 'high'
+
+export interface SearchEligibilityResult {
+  status: SearchEligibility
+  checks: Array<{
+    id: string
+    label: string
+    status: 'pass' | 'fail' | 'warning' | 'unknown'
+    detail?: string
+  }>
+}
+
+export interface AuditResult {
+  url: string;
+  title: string;
+  initialScore: number;
+  overallScore: number;
+  technicalScore: number;
+  chatGptSearchScore: number;
+  academicGeoScore: number;
+  eeatScore: number;
+  schemaScore: number;
+  bingScore: number;
+  lastScanned: string;
+
+  // Block 4 & v3: 점수 모델 필드
+  scoreModelVersion?: string       // 예: "v3.0"
+  legacyScore?: number             // overallScore의 legacy 복사본
+  searchEligibility?: SearchEligibilityResult
+  seoFoundationScore?: number      // SEO Foundation 독립 점수 (0-100)
+  aiCitationReadinessScore?: number // AI Citation Readiness 독립 점수 (0-100)
+  measurementConfidence?: MeasurementConfidence
+  ruleResults?: RuleResult[]       // 단일 원천 검사 결과 항목 목록
+  schemaEvaluationLevel?: SchemaEvaluationLevel
+
+  // 실제 URL에서 추출한 신호 (스트리밍 분석 시 채워짐)
+  pageSignals?: PageSignals;
+
+  // AI 분석 결과 (새 구조)
+  summary?: string;
+  criteria?: CriteriaItem[];
+  strengthSummary?: string[];
+  criticalIssues?: string[];
+  quickWins?: string[];
+
+  // 기존 구조 (하위 호환성)
+  metrics: MetricItem[];
+  botPolicies: BotPermissionPolicy[];
+  geoFactors: GeoFactorMetric[];
+  scoreHistory: ScoreHistoryEntry[];
+
+  generatedSchemaJson: string;
+  optimizedMeta: {
+    title: string;
+    description: string;
+    keywords: string[];
+    ogTitle: string;
+    ogDescription: string;
+    ogImage: string;
+    canonical: string;
+    headings: { level: string; text: string }[];
+  };
+  eeatAnalysis: {
+    authorName?: string;
+    sameAsProfiles: string[];
+    expertiseSignatures: string[];
+    trustSignals: string[];
+    originalityAssessment: string;
+    improvementSuggestions: string[];
+  };
+  aeoSimulation: {
+    targetQuery: string;
+    chatGptSearchSnippet: string;
+    googleAiOverviewSnippet: string;
+    perplexitySnippet: string;
+    citationProbable: boolean;
+    citedUrl: string;
+    citedAnchorText: string;
+    keyFactExtractor: string[];
+  };
+}
+
+export interface PresetSite {
+  id: string;
+  name: string;
+  type: string;
+  url: string;
+  audit: AuditResult;
+}
+
+export type DetailTabType = 'technical' | 'chatgpt' | 'geo' | 'schema' | 'eeat' | 'cms';
+
+// 실제 URL에서 추출한 SEO 신호
+export interface PageSignals {
+  url: string
+  isHttps: boolean
+  statusCode: number
+  responseTime: number
+  title: string
+  metaDescription: string
+  canonical: string
+  metaRobots: string
+  h1s: string[]
+  h2s: string[]
+  h3s: string[]
+  ogTitle: string
+  ogDescription: string
+  ogImage: string
+  twitterCard: string
+  jsonLdRaw: string[]
+  robotsTxt: string
+  hasViewport: boolean
+  hasCharset: boolean
+  wordCount: number
+  internalLinks: number
+  externalLinks: number
+  imageCount: number
+  imagesWithAlt: number
+  hasSchema: boolean
+  hasHreflang: boolean
+  hasSitemap: boolean
+  fetchError?: string
+  // Analytics detection
+  hasGA4: boolean
+  ga4MeasurementId?: string
+  hasGTM: boolean
+  gtmId?: string
+  hasUALegacy: boolean
+  hasFbPixel: boolean
+  hasNaverAnalytics: boolean
+}
+
+// 스트리밍 분석 이벤트
+export interface AnalysisEvent {
+  type: 'step' | 'signals' | 'result' | 'error'
+  msg?: string
+  level?: 'info' | 'success' | 'warn'
+  data?: PageSignals
+  ts: number
+}
+
+export interface AIAnalysisResponse {
+  title: string;
+  overallScore: number;
+  technicalScore: number;
+  chatGptSearchScore: number;
+  academicGeoScore: number;
+  eeatScore: number;
+  schemaScore: number;
+  bingScore: number;
+  summary: string;
+  criteria: CriteriaItem[];
+  strengthSummary: string[];
+  criticalIssues: string[];
+  quickWins: string[];
+}
