@@ -16,6 +16,7 @@ const CATEGORY_META = [
   ['eeatScore', 'E-E-A-T'],
   ['schemaScore', 'Schema.org'],
   ['bingScore', 'Bing / AEO'],
+  ['naverScore', 'Naver'],
 ] as const
 
 function statusColor(score: number) {
@@ -32,12 +33,12 @@ export function buildReportHtml(audit: AuditResult, options: { showToolbar?: boo
     .filter(item => item.status !== 'pass')
     .sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority] || b.estimatedScoreGain - a.estimatedScoreGain)
   const strengths = (audit.criteria ?? []).filter(item => item.status === 'pass').slice(0, 6)
-  const categories = CATEGORY_META.map(([key, label]) => ({ label, score: audit[key] as number }))
+  const categories = CATEGORY_META.map(([key, label]) => ({ label, score: (audit[key] as number | undefined) ?? 0 }))
   const crawl = audit.siteCrawl
   const generatedAt = new Date().toLocaleString('ko-KR')
 
   const categoryHtml = categories.map(item => `<div class="score-row"><div><b>${escapeHtml(item.label)}</b><span>${item.score}점</span></div><div class="bar"><i style="width:${item.score}%;background:${statusColor(item.score)}"></i></div></div>`).join('')
-  const issueHtml = issues.length ? issues.map((item, index) => `<article class="issue"><div class="issue-no">${index + 1}</div><div><div class="issue-head"><strong>${escapeHtml(item.name)}</strong><span>${priorityLabel(item.priority)} · 예상 +${item.estimatedScoreGain}점</span></div><p><b>현재 상태</b>${escapeHtml(item.currentState)}</p><p><b>해결 방법</b>${escapeHtml(item.improvement).replace(/\n/g, '<br>')}</p>${item.codeSnippet ? `<pre>${escapeHtml(item.codeSnippet)}</pre>` : ''}<small>검증 기준: ${escapeHtml(item.evaluationCriteria)}</small></div></article>`).join('') : '<div class="empty">주요 개선 항목이 없습니다.</div>'
+  const issueHtml = issues.length ? issues.map((item, index) => `<article class="issue"><div class="issue-no">${index + 1}</div><div><div class="issue-head"><strong>${escapeHtml(item.name)}</strong><span>${priorityLabel(item.priority)} · 영향도 ${item.priority === 'critical' || item.priority === 'high' ? '높음' : item.priority === 'medium' ? '중간' : '낮음'}</span></div><p><b>현재 상태</b>${escapeHtml(item.currentState)}</p><p><b>해결 방법</b>${escapeHtml(item.improvement).replace(/\n/g, '<br>')}</p>${item.codeSnippet ? `<pre>${escapeHtml(item.codeSnippet)}</pre>` : ''}<small>검증 기준: ${escapeHtml(item.evaluationCriteria)} · 실제 점수는 재검사 후 산정</small></div></article>`).join('') : '<div class="empty">주요 개선 항목이 없습니다.</div>'
   const strengthHtml = strengths.map(item => `<li><span>✓</span><div><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.currentState)}</small></div></li>`).join('')
   const crawlHtml = crawl ? `<div class="crawl-grid"><div><span>Health Score</span><b>${crawl.healthScore}</b></div><div><span>분석 페이지</span><b>${crawl.scannedPages}</b></div><div><span>정상 페이지</span><b>${crawl.healthyPages}</b></div><div><span>발견 URL</span><b>${crawl.discoveredUrls}</b></div></div><p class="note">점수 모델 ${escapeHtml(crawl.scoreModelVersion)} · robots.txt 제외 ${crawl.blockedByRobots}개 · 최대 ${crawl.limits.maxPages}페이지</p>` : '<div class="empty">사이트 전체 크롤링 데이터가 없습니다.</div>'
 
@@ -51,8 +52,8 @@ export function buildReportHtml(audit: AuditResult, options: { showToolbar?: boo
 @media(max-width:700px){.cover,.section{padding:26px}.cover h1{font-size:25px}.summary{grid-template-columns:1fr}.crawl-grid{grid-template-columns:1fr 1fr}.strengths{grid-template-columns:1fr}.issue-head{display:block}.issue-head span{display:inline-block;margin-top:7px}}
 @media print{body{background:white}.toolbar{display:none}.report{width:100%;margin:0;box-shadow:none;border:0;border-radius:0}.issue{break-inside:avoid}.section{break-inside:avoid}}
 </style></head><body>${toolbarHtml}<main class="report">
-<section class="cover"><small>SEOGEO · v0.4 REPORT</small><h1>${escapeHtml(audit.title)}</h1><p>${escapeHtml(audit.url)}</p><div class="meta"><span>분석일 ${escapeHtml(audit.lastScanned)}</span><span>보고서 생성 ${generatedAt}</span><span>점수 모델 ${escapeHtml(audit.scoreModelVersion ?? 'v0.3')}</span></div></section>
-<section class="section"><h2>핵심 요약</h2><div class="summary"><div class="hero-score"><span>SEO 기반 점수</span><b>${audit.seoFoundationScore ?? audit.overallScore}<small>/100</small></b></div><div class="hero-score ai"><span>AI 인용 준비도</span><b>${audit.aiCitationReadinessScore ?? audit.academicGeoScore}<small>/100</small></b></div><div class="summary-card"><span>영역별 점수</span>${categoryHtml}</div></div></section>
+<section class="cover"><small>SEOGEO · v0.6 READINESS REPORT</small><h1>${escapeHtml(audit.title)}</h1><p>${escapeHtml(audit.url)}</p><div class="meta"><span>분석일 ${escapeHtml(audit.lastScanned)}</span><span>보고서 생성 ${generatedAt}</span><span>점수 모델 ${escapeHtml(audit.scoreModelVersion ?? 'v0.6-r1')}</span></div></section>
+<section class="section"><h2>핵심 요약</h2><div class="summary"><div class="hero-score"><span>SEO 기술 준비도</span><b>${audit.seoFoundationScore ?? audit.overallScore}<small>/100</small></b></div><div class="hero-score ai"><span>AI 인용 준비도</span><b>${audit.aiCitationReadinessScore ?? audit.academicGeoScore}<small>/100</small></b></div><div class="summary-card"><span>영역별 점수</span>${categoryHtml}</div></div><p class="note">SEOGEO 자체 준비도 지수이며 공식 검색 순위나 노출을 보장하지 않습니다. 측정 신뢰도: ${escapeHtml(audit.measurementConfidence ?? 'low')}.</p></section>
 <section class="section"><h2>우선 개선 과제</h2>${issueHtml}</section>
 <section class="section"><h2>현재 강점</h2><ul class="strengths">${strengthHtml || '<li>확인된 강점이 없습니다.</li>'}</ul></section>
 <section class="section"><h2>사이트 전체 진단</h2>${crawlHtml}</section>

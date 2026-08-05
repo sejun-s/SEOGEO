@@ -5,11 +5,12 @@ interface ScoreOverviewProps { audit: AuditResult }
 
 const CATEGORY_META = [
   ['technicalScore', 'Technical SEO'],
-  ['chatGptSearchScore', 'ChatGPT Search'],
-  ['academicGeoScore', 'GEO'],
-  ['eeatScore', 'E-E-A-T'],
+  ['chatGptSearchScore', 'AI 검색 접근'],
+  ['academicGeoScore', '인용 구조 신호'],
+  ['eeatScore', '콘텐츠 신뢰 신호'],
   ['schemaScore', 'Schema.org'],
-  ['bingScore', 'Bing / AEO'],
+  ['bingScore', 'Bing'],
+  ['naverScore', 'Naver'],
 ] as const
 
 function tone(score: number) {
@@ -44,9 +45,14 @@ function RadarChart({ values }: { values: Array<{ label: string; score: number }
 }
 
 export function ScoreOverview({ audit }: ScoreOverviewProps) {
-  const categories = CATEGORY_META.map(([key, label]) => ({ key, label, score: audit[key] as number })).sort((a, b) => a.score - b.score)
+  const categories = CATEGORY_META
+    .filter(([key]) => key !== 'naverScore' || typeof audit.naverScore === 'number')
+    .map(([key, label]) => ({ key, label, score: (audit[key] as number | undefined) ?? 0 }))
+    .sort((a, b) => a.score - b.score)
   const primaryScore = audit.seoFoundationScore ?? audit.overallScore
   const aiScore = audit.aiCitationReadinessScore ?? Math.round((audit.chatGptSearchScore + audit.academicGeoScore) / 2)
+  const hasNaverScore = typeof audit.naverScore === 'number'
+  const naverScore = audit.naverScore ?? 0
   const primaryTone = tone(primaryScore)
   const priorityRank = { critical: 0, high: 1, medium: 2, low: 3 }
   const topIssue = (audit.criteria ?? []).filter(item => item.status !== 'pass').sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority] || b.estimatedScoreGain - a.estimatedScoreGain)[0]
@@ -65,17 +71,24 @@ export function ScoreOverview({ audit }: ScoreOverviewProps) {
 
       <div className="v03-score-grid">
         <article className="v03-primary-score">
-          <div className="v03-score-label"><ShieldCheck size={17} /> SEO 기반 점수</div>
+          <div className="v03-score-label"><ShieldCheck size={17} /> SEO 기술 준비도</div>
           <div className="v03-score-number">{primaryScore}<small>/100</small></div>
           <span className="v03-status-pill" style={{ color: primaryTone.text, background: primaryTone.bg }}>{primaryTone.label}</span>
-          <p>색인, 크롤링, 콘텐츠 구조를 기준으로 한 핵심 준비도입니다.</p>
+          <p>대표 페이지의 접근·색인·HTML 구조를 측정한 자체 지표입니다.</p>
         </article>
 
         <article className="v03-primary-score ai">
           <div className="v03-score-label"><Sparkles size={17} /> AI 인용 준비도</div>
           <div className="v03-score-number">{aiScore}<small>/100</small></div>
           <span className="v03-status-pill" style={{ color: tone(aiScore).text, background: tone(aiScore).bg }}>{tone(aiScore).label}</span>
-          <p>AI 검색 서비스가 내용을 이해하고 인용하기 쉬운 정도입니다.</p>
+          <p>접근성·정보 구조·출처 신호를 측정하며 실제 인용을 보장하지 않습니다.</p>
+        </article>
+
+        <article className="v03-primary-score naver">
+          <div className="v03-score-label"><span className="font-black text-green-700">N</span> 네이버 검색 준비도</div>
+          <div className="v03-score-number">{hasNaverScore ? naverScore : '—'}<small>{hasNaverScore ? '/100' : ''}</small></div>
+          <span className="v03-status-pill" style={{ color: hasNaverScore ? tone(naverScore).text : '#475569', background: hasNaverScore ? tone(naverScore).bg : '#e2e8f0' }}>{hasNaverScore ? tone(naverScore).label : '재분석 필요'}</span>
+          <p>{hasNaverScore ? 'Yeti 접근, 색인 설정, 메타 권장 범위와 Sitemap 준비 상태입니다.' : 'v0.6 기준 네이버 준비도를 확인하려면 URL을 다시 분석하세요.'}</p>
         </article>
 
         <article className="v03-radar-card">
@@ -89,7 +102,7 @@ export function ScoreOverview({ audit }: ScoreOverviewProps) {
         <div className="v03-action-copy">
           <span>지금 가장 먼저 할 일</span>
           <strong>{topIssue?.name ?? '핵심 SEO 항목이 안정적입니다'}</strong>
-          <p>{topIssue ? `${topIssue.improvement.split('\n')[0].replace(/^①\s*/, '')} · 예상 +${topIssue.estimatedScoreGain}점` : '현재 주요 감점 항목이 없습니다.'}</p>
+          <p>{topIssue ? `${topIssue.improvement.split('\n')[0].replace(/^①\s*/, '')} · ${topIssue.priority === 'critical' || topIssue.priority === 'high' ? '영향도 높음' : '영향도 중간'}` : '현재 주요 감점 항목이 없습니다.'}</p>
         </div>
         {topIssue && <button onClick={goToAction}>해결 방법 보기 <ArrowRight size={15} /></button>}
       </div>
@@ -104,7 +117,7 @@ export function ScoreOverview({ audit }: ScoreOverviewProps) {
         ))}
       </div>
 
-      <div className="v03-disclaimer"><Info size={14} /> 자체 준비도 지표이며 Google 또는 AI 서비스의 공식 순위 점수가 아닙니다. 확인 가능한 공개 데이터와 규칙 근거를 사용합니다.</div>
+      <div className="v03-disclaimer"><Info size={14} /> SEOGEO 자체 준비도 지수입니다. Google·네이버·AI 서비스의 공식 점수나 노출 보장이 아니며, 측정 신뢰도는 <b>{audit.measurementConfidence === 'high' ? '높음' : audit.measurementConfidence === 'medium' ? '보통' : '낮음'}</b>입니다. 실제 수집·색인·노출은 각 웹마스터 도구에서 확인해야 합니다.</div>
     </section>
   )
 }

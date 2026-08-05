@@ -11,7 +11,7 @@ const PRIORITY_LABEL: Record<string, { label: string; cls: string }> = {
 
 const CATEGORY_LABEL: Record<string, string> = {
   technical: 'Technical', chatgpt: 'ChatGPT', geo: 'GEO',
-  eeat: 'E-E-A-T', schema: 'Schema', bing: 'Bing/AEO',
+  eeat: '신뢰 신호', schema: 'Schema', bing: 'Bing', naver: 'Naver',
 };
 
 function CodeSnippet({ code, codeType }: { code: string; codeType?: string }) {
@@ -149,7 +149,7 @@ export const FixChecklist: React.FC<Props> = ({ audit, onReanalyze, isScanning }
           const done = checked.has(item.id);
           const open = expanded.has(item.id);
           const p = PRIORITY_LABEL[item.priority];
-          const impactText = `예상 +${item.estimatedScoreGain}점`;
+          const impactText = item.priority === 'critical' || item.priority === 'high' ? '영향도 높음' : item.priority === 'medium' ? '영향도 중간' : '영향도 낮음';
           return (
             <div
               key={item.id}

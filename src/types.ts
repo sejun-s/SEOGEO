@@ -18,7 +18,7 @@ export interface BotPermissionPolicy {
 export interface MetricItem {
   id: string;
   title: string;
-  category: 'technical' | 'chatgpt' | 'geo' | 'eeat' | 'schema' | 'bing' | 'analytics';
+  category: 'technical' | 'chatgpt' | 'geo' | 'eeat' | 'schema' | 'bing' | 'naver' | 'analytics';
   status: 'pass' | 'warning' | 'fail';
   score: number;
   scoreBoost: number;
@@ -41,7 +41,7 @@ export interface ScoreHistoryEntry {
 export interface CriteriaItem {
   id: string;
   name: string;
-  category: 'technical' | 'chatgpt' | 'geo' | 'eeat' | 'schema' | 'bing' | 'analytics';
+  category: 'technical' | 'chatgpt' | 'geo' | 'eeat' | 'schema' | 'bing' | 'naver' | 'analytics';
   score: number;
   status: 'pass' | 'warning' | 'fail';
   weight: '높음' | '중간' | '낮음' | '참고 (SEO 점수 미영향)';
@@ -71,7 +71,7 @@ export interface RuleResult {
   ruleId: string;
   ruleVersion: string;
   title: string;
-  category: 'technical' | 'chatgpt' | 'geo' | 'eeat' | 'schema' | 'bing' | 'analytics';
+  category: 'technical' | 'chatgpt' | 'geo' | 'eeat' | 'schema' | 'bing' | 'naver' | 'analytics';
   status: 'pass' | 'warning' | 'fail' | 'unknown' | 'not_applicable';
   severity: 'critical' | 'high' | 'medium' | 'low';
   applicable: boolean;
@@ -112,10 +112,11 @@ export interface AuditResult {
   eeatScore: number;
   schemaScore: number;
   bingScore: number;
+  naverScore?: number;
   lastScanned: string;
 
   // Block 4 & v3: 점수 모델 필드
-  scoreModelVersion?: string       // 예: "v3.0"
+  scoreModelVersion?: string       // 예: "v0.6-r1"
   legacyScore?: number             // overallScore의 legacy 복사본
   searchEligibility?: SearchEligibilityResult
   seoFoundationScore?: number      // SEO Foundation 독립 점수 (0-100)
@@ -240,6 +241,7 @@ export interface AIAnalysisResponse {
   eeatScore: number;
   schemaScore: number;
   bingScore: number;
+  naverScore?: number;
   summary: string;
   criteria: CriteriaItem[];
   strengthSummary: string[];

@@ -4,11 +4,12 @@ import { ArrowRight, CheckCircle2, MessageSquareText, Star, TrendingDown, Trendi
 
 const CATEGORIES = [
   { key: 'technicalScore', category: 'technical', label: 'Technical SEO' },
-  { key: 'chatGptSearchScore', category: 'chatgpt', label: 'ChatGPT Search' },
-  { key: 'academicGeoScore', category: 'geo', label: '학술 GEO' },
-  { key: 'eeatScore', category: 'eeat', label: 'E-E-A-T' },
+  { key: 'chatGptSearchScore', category: 'chatgpt', label: 'AI 검색 접근' },
+  { key: 'academicGeoScore', category: 'geo', label: '인용 구조 신호' },
+  { key: 'eeatScore', category: 'eeat', label: '콘텐츠 신뢰 신호' },
   { key: 'schemaScore', category: 'schema', label: 'Schema.org' },
-  { key: 'bingScore', category: 'bing', label: 'Bing & AEO' },
+  { key: 'bingScore', category: 'bing', label: 'Bing' },
+  { key: 'naverScore', category: 'naver', label: 'Naver' },
 ] as const;
 
 const PRIORITY_ORDER: Record<CriteriaItem['priority'], number> = { critical: 0, high: 1, medium: 2, low: 3 };
@@ -19,6 +20,10 @@ function scoreTone(score: number) {
 
 function domain(url: string) {
   return url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+}
+
+function categoryScore(audit: AuditResult, key: keyof AuditResult) {
+  return Number(audit[key] ?? 0);
 }
 
 function firstAction(item?: CriteriaItem) {
@@ -46,11 +51,11 @@ export const CompareView: React.FC<Props> = ({ audits, onClose, myCompanyUrl }) 
 
   const priorities = CATEGORIES
     .map(category => {
-      const myScore = baseline[category.key] as number;
+      const myScore = categoryScore(baseline, category.key);
       const bestCompetitor = audits
         .filter(audit => audit.url !== baseline.url)
-        .sort((a, b) => (b[category.key] as number) - (a[category.key] as number))[0];
-      const competitorScore = bestCompetitor ? bestCompetitor[category.key] as number : myScore;
+        .sort((a, b) => categoryScore(b, category.key) - categoryScore(a, category.key))[0];
+      const competitorScore = bestCompetitor ? categoryScore(bestCompetitor, category.key) : myScore;
       return { ...category, gap: competitorScore - myScore, issue: topIssue(baseline, category.category) };
     })
     .filter(item => item.gap > 0 || item.issue)
@@ -123,9 +128,9 @@ export const CompareView: React.FC<Props> = ({ audits, onClose, myCompanyUrl }) 
         </div>
 
         {CATEGORIES.map(({ key, category, label }, index) => {
-          const scores = audits.map(audit => audit[key] as number);
+          const scores = audits.map(audit => categoryScore(audit, key));
           const bestScore = Math.max(...scores);
-          const baselineScore = baseline[key] as number;
+          const baselineScore = categoryScore(baseline, key);
           const leader = audits[scores.indexOf(bestScore)];
           const gap = bestScore - baselineScore;
           const issue = topIssue(baseline, category);
@@ -148,7 +153,7 @@ export const CompareView: React.FC<Props> = ({ audits, onClose, myCompanyUrl }) 
 
               <div className="px-5 py-4 grid gap-3" style={{ gridTemplateColumns: `repeat(${audits.length}, minmax(0, 1fr))` }}>
                 {audits.map(audit => {
-                  const score = audit[key] as number;
+                  const score = categoryScore(audit, key);
                   return (
                     <div key={audit.url} className={`rounded-xl border p-3 ${audit.url === baseline.url ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-slate-50'}`}>
                       <div className="flex items-center justify-between gap-2">

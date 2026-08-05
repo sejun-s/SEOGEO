@@ -188,38 +188,38 @@ type BotAccessState = 'explicitly_allowed' | 'allowed_by_general_rule' | 'explic
 function interpretBotAccess(rb: string, botName: string): BotAccessState {
   if (!rb) return 'unknown'
   const lines = rb.split('\n').map(l => l.trim().toLowerCase())
-  const globalDisallowAll = lines.some(l => l === 'disallow: /')
-
-
-
-  // Check for explicit named bot rule (not just *)
-  let inNamedSection = false
-  let hasNamedRule = false
-  let namedDisallow = false
-  let namedAllow = false
+  let activeAgents: string[] = []
+  let rulesStarted = false
+  const rules: Record<string, { allowRoot: boolean; disallowAll: boolean }> = {}
 
   for (const line of lines) {
+    if (!line || line.startsWith('#')) continue
     if (line.startsWith('user-agent:')) {
-      const ua = line.replace('user-agent:', '').trim()
-      inNamedSection = ua === botName.toLowerCase()
-      if (inNamedSection) hasNamedRule = true
+      if (rulesStarted) activeAgents = []
+      activeAgents.push(line.slice('user-agent:'.length).trim())
+      rulesStarted = false
       continue
     }
-    if (inNamedSection) {
-      if (line.startsWith('disallow:')) namedDisallow = true
-      if (line.startsWith('allow: /') || line === 'allow:/') namedAllow = true
+    if (!line.startsWith('allow:') && !line.startsWith('disallow:')) continue
+    rulesStarted = true
+    const [directive, ...rest] = line.split(':')
+    const path = rest.join(':').trim()
+    for (const agent of activeAgents) {
+      rules[agent] ??= { allowRoot: false, disallowAll: false }
+      if (directive === 'allow' && (path === '/' || path === '/*')) rules[agent].allowRoot = true
+      if (directive === 'disallow' && (path === '/' || path === '/*')) rules[agent].disallowAll = true
     }
   }
 
-  if (hasNamedRule) {
-    if (namedAllow && !namedDisallow) return 'explicitly_allowed'
-    if (namedDisallow && !namedAllow) return 'explicitly_blocked'
-    return 'allowed_by_general_rule' // partial rule
+  const named = rules[botName.toLowerCase()]
+  if (named) {
+    if (named.disallowAll && !named.allowRoot) return 'explicitly_blocked'
+    if (named.allowRoot) return 'explicitly_allowed'
+    return 'allowed_by_general_rule'
   }
-
-  // No explicit named rule — interpret by general rule
-  if (globalDisallowAll) return 'explicitly_blocked'
-  return 'allowed_by_general_rule' // 미명시 = 허용으로 해석
+  const general = rules['*']
+  if (general?.disallowAll && !general.allowRoot) return 'explicitly_blocked'
+  return 'allowed_by_general_rule'
 }
 
 // ─── 검색 자격 게이트 (Block 4) ──────────────────────────────────────────────
@@ -289,71 +289,32 @@ export function calcMeasurementConfidence(s: PageSignals): MeasurementConfidence
 
 export function calcAiCitationReadiness(s: PageSignals): number {
   const rb = s.robotsTxt.toLowerCase()
-
-  // ai_accessibility (15%): 실제 접근 허용 여부
   const oaiState = interpretBotAccess(rb, 'oai-searchbot')
-  const gptState = interpretBotAccess(rb, 'gptbot')
-  const accessScore =
-    oaiState === 'explicitly_allowed' ? 100 :
-    oaiState === 'allowed_by_general_rule' ? 70 :
-    oaiState === 'explicitly_blocked' ? 10 : 50
-  const gptBonus = gptState === 'explicitly_allowed' ? 20 : gptState === 'explicitly_blocked' ? 0 : 10
-  const aiAccess = Math.min(100, accessScore * 0.7 + gptBonus)
+  if (oaiState === 'explicitly_blocked') return 0
 
-  // question_coverage (20%): 콘텐츠 구조와 깊이 (절대 임계값 대신 연속 스케일)
-  const hasContent = s.wordCount > 100
-  const hasStructure = s.h2s.length > 0
-  const coverageScore = (
-    (hasContent ? 30 : 0) +
-    (hasStructure ? 25 : 0) +
-    Math.min(25, s.h2s.length * 5) +
-    Math.min(20, s.wordCount > 500 ? 20 : s.wordCount > 200 ? 10 : 0)
+  const accessScore = oaiState === 'unknown' ? 0 : 100
+  const structureScore = Math.min(100,
+    (s.h1s.length === 1 ? 30 : 0) +
+    (s.h2s.length > 0 ? 25 : 0) +
+    (s.title ? 20 : 0) +
+    (s.metaDescription ? 15 : 0) +
+    (s.wordCount > 200 ? 10 : 0)
   )
-
-  // evidence_originality (25%): 근거와 독창성 신호 (정적 분석 한계 반영)
-  const hasExternal = s.externalLinks > 0
-  const hasImages = s.imageCount > 0
-  const hasAltImages = s.imagesWithAlt > s.imageCount * 0.5
-  const evidenceScore = (
-    (hasExternal ? 30 : 0) +
-    Math.min(20, s.externalLinks * 5) +
-    (hasImages && hasAltImages ? 20 : hasImages ? 10 : 0) +
-    (s.wordCount > 300 ? 10 : 0) +
-    20 // 정적 분석만으로 판단 불가한 부분 — 기본 점수
+  const evidenceScore = Math.min(100,
+    Math.min(50, s.externalLinks * 10) +
+    (s.wordCount > 300 ? 20 : 0) +
+    (s.imageCount > 0 && s.imagesWithAlt / s.imageCount >= 0.8 ? 15 : 0) +
+    (s.hasSchema ? 15 : 0)
   )
-
-  // entity_trust (20%): 엔티티 신뢰성 신호
   const schemaContent = s.jsonLdRaw.join(' ').toLowerCase()
   const hasOrgSchema = schemaContent.includes('organization') || schemaContent.includes('person')
-  const entityScore = (
-    (s.isHttps ? 25 : 0) +
-    (hasOrgSchema ? 30 : s.hasSchema ? 15 : 0) +
-    (schemaContent.includes('sameas') ? 20 : 0) +
-    (s.ogTitle ? 10 : 0) +
-    15 // 외부 언급은 정적 분석 불가 — 기본 점수
+  const entityScore = Math.min(100,
+    (hasOrgSchema ? 45 : s.hasSchema ? 20 : 0) +
+    (schemaContent.includes('sameas') ? 30 : 0) +
+    (s.ogTitle && s.ogDescription ? 15 : 0) +
+    (s.canonical ? 10 : 0)
   )
-
-  // extractability (10%): 정보 추출 가능성
-  const hasH1 = s.h1s.length === 1
-  const extractScore = (
-    (hasH1 ? 30 : s.h1s.length > 0 ? 15 : 0) +
-    (s.h2s.length > 0 ? 25 : 0) +
-    (s.hasSchema ? 25 : 0) +
-    (s.wordCount > 100 ? 20 : 0)
-  )
-
-  // freshness (10%): 정적 분석으로 판단 불가 — 중립 점수
-  const freshnessScore = 50
-
-  const total =
-    Math.min(100, aiAccess)       * 0.15 +
-    Math.min(100, coverageScore)  * 0.20 +
-    Math.min(100, evidenceScore)  * 0.25 +
-    Math.min(100, entityScore)    * 0.20 +
-    Math.min(100, extractScore)   * 0.10 +
-    freshnessScore                * 0.10
-
-  return Math.round(total)
+  return Math.round(accessScore * 0.25 + structureScore * 0.30 + evidenceScore * 0.25 + entityScore * 0.20)
 }
 
 // ─── 실측 기반 점수 계산 (v2 — Block 3/4 기준 적용) ─────────────────────────
@@ -365,6 +326,7 @@ export interface CategoryScores {
   eeatScore: number
   academicGeoScore: number
   bingScore: number
+  naverScore: number
   seoFoundationScore: number
   aiCitationReadinessScore: number
   searchEligibility: SearchEligibilityResult
@@ -375,86 +337,84 @@ export interface CategoryScores {
 
 export function calcCategoryScore(s: PageSignals): CategoryScores {
   let tech = 0
-  if (s.isHttps)                                              tech += 15
-  if (s.statusCode === 200)                                   tech += 10
-  if (s.title && s.title.length >= 10 && s.title.length <= 70) tech += 15
-  else if (s.title)                                           tech += 8
-  if (s.metaDescription && s.metaDescription.length >= 50)   tech += 12
-  else if (s.metaDescription)                                 tech += 6
+  if (s.isHttps)                                              tech += 10
+  if (s.statusCode === 200)                                   tech += 15
+  if (!s.metaRobots.toLowerCase().includes('noindex'))        tech += 15
+  if (s.title && s.title.length <= 70)                         tech += 15
+  else if (s.title)                                           tech += 7
+  if (s.metaDescription)                                      tech += 10
   if (s.canonical)                                            tech += 10
-  if (s.h1s.length === 1)                                     tech += 12
-  else if (s.h1s.length > 1)                                  tech += 4
-  if (s.h2s.length >= 2)                                      tech += 8
+  if (s.h1s.length === 1)                                     tech += 10
+  else if (s.h1s.length > 0)                                  tech += 4
   if (s.hasViewport)                                          tech += 8
-  if (s.ogTitle && s.ogDescription)                           tech += 7
-  if (!s.metaRobots.toLowerCase().includes('noindex'))        tech += 3
-  if (s.responseTime < 3000)                                  tech += 5
-  else if (s.responseTime < 6000)                             tech += 2
+  if (s.responseTime < 3000)                                  tech += 7
+  else if (s.responseTime < 6000)                             tech += 3
 
   const rb = s.robotsTxt.toLowerCase()
 
   // ChatGPT Search — 미명시는 allowed_by_general_rule로 해석 (Block 3)
   const oaiState = interpretBotAccess(rb, 'oai-searchbot')
-  const gptState = interpretBotAccess(rb, 'gptbot')
   let chatgpt = 0
-  chatgpt += oaiState === 'explicitly_allowed' ? 45 : oaiState === 'explicitly_blocked' ? 5 : 28
-  chatgpt += gptState === 'explicitly_allowed' ? 20 : gptState === 'explicitly_blocked' ? 0 : 10
-  if (s.title && s.metaDescription) chatgpt += 15
-  // 콘텐츠 깊이: 절대 임계값 대신 연속 스케일 (Block 4)
-  chatgpt += Math.min(10, Math.floor(s.wordCount / 100))
+  chatgpt += oaiState === 'explicitly_blocked' ? 0 : oaiState === 'unknown' ? 0 : 45
+  if (s.title && s.metaDescription)                            chatgpt += 20
+  if (s.h1s.length === 1 && s.h2s.length > 0)                  chatgpt += 15
+  if (s.wordCount > 200)                                      chatgpt += 10
+  if (s.externalLinks > 0)                                    chatgpt += 10
 
   let schema = 0
-  if (s.hasSchema) schema += 35
+  if (s.hasSchema) schema += 30
   if (s.jsonLdRaw.length > 0) {
     const c = s.jsonLdRaw.join(' ').toLowerCase()
-    if (c.includes('@graph'))                                 schema += 20
+    if (c.includes('organization') || c.includes('website') || c.includes('person')) schema += 25
+    if (c.includes('product') || c.includes('article'))       schema += 25
     if (c.includes('sameas'))                                 schema += 20
-    if (c.includes('faqpage') || c.includes('howto'))         schema += 15
-    else if (c.includes('product') || c.includes('article')) schema += 10
   }
 
   // E-E-A-T — 단어 수 절대 임계값 제거, 연속 스케일로 변경 (Block 4)
-  let eeat = 30
-  if (s.wordCount > 200)   eeat += 5   // 최소 콘텐츠 존재
-  if (s.wordCount > 800)   eeat += 8   // 어느 정도 깊이 (기존 1000단어 임계값 → 완화)
-  if (s.wordCount > 2000)  eeat += 7   // 심층 콘텐츠 (기존 3000단어 → 완화)
-  if (s.externalLinks > 2) eeat += 10
-  if (s.hasHreflang)       eeat += 5
-  if (s.imagesWithAlt > 0) eeat += 10
-  if (s.isHttps)           eeat += 10
-  if (s.h2s.length >= 2)   eeat += 5   // 기존 h2 >= 3 → 완화
+  let eeat = 0
+  const schemaContent = s.jsonLdRaw.join(' ').toLowerCase()
+  if (schemaContent.includes('person') || schemaContent.includes('organization')) eeat += 30
+  if (schemaContent.includes('sameas'))                       eeat += 20
+  if (s.externalLinks > 0)                                    eeat += 20
+  if (s.wordCount > 300)                                      eeat += 15
+  if (s.ogTitle && s.ogDescription)                           eeat += 10
+  if (s.imagesWithAlt > 0)                                    eeat += 5
 
   // GEO — 단어 수/H2 절대 임계값 제거 (Block 3/4)
-  let geo = 20
-  if (s.wordCount > 200)   geo += 5    // 콘텐츠 존재 여부 (연속 스케일)
-  if (s.wordCount > 500)   geo += 8
-  if (s.wordCount > 1500)  geo += 7    // 기존 2000단어 → 완화
-  if (s.h2s.length >= 1)   geo += 10   // 제목 구조 존재 여부 (기존 >= 3 절대 기준 제거)
-  if (s.h2s.length >= 3)   geo += 5    // 추가 가점 (더 이상 "필수" 아님)
-  if (s.h3s.length >= 2)   geo += 8
-  if (s.externalLinks > 0) geo += 15
-  if (s.imagesWithAlt > s.imageCount * 0.5) geo += 12
+  let geo = 0
+  if (s.wordCount > 200)                                      geo += 20
+  if (s.h1s.length === 1 && s.h2s.length > 0)                  geo += 25
+  if (s.externalLinks > 0)                                    geo += 25
+  if (s.hasSchema)                                            geo += 15
+  if (schemaContent.includes('sameas'))                       geo += 15
 
-  let bing = 25
-  if (s.hasSitemap)        bing += 20
-  if (s.isHttps)           bing += 15
-  if (s.hasSchema)         bing += 20
-  if (!rb.includes('disallow: /')) bing += 20
+  const bingState = interpretBotAccess(rb, 'bingbot')
+  let bing = 0
+  if (bingState !== 'explicitly_blocked' && bingState !== 'unknown') bing += 35
+  if (s.hasSitemap)                                            bing += 30
+  if (!s.metaRobots.toLowerCase().includes('noindex'))         bing += 20
+  if (s.canonical)                                             bing += 15
+
+  const yetiState = interpretBotAccess(rb, 'yeti')
+  let naver = 0
+  if (yetiState !== 'explicitly_blocked' && yetiState !== 'unknown') naver += 30
+  if (!s.metaRobots.toLowerCase().includes('noindex'))         naver += 20
+  if (s.title && s.title.length <= 40)                         naver += 15
+  else if (s.title)                                            naver += 7
+  if (s.metaDescription && s.metaDescription.length <= 80)     naver += 15
+  else if (s.metaDescription)                                  naver += 7
+  if (s.hasSitemap)                                            naver += 10
+  if (s.canonical)                                             naver += 10
 
   // SEO Foundation 점수 (Block 4 — Technical + 색인 가능성 중심)
-  const seoFoundation = Math.round(
-    Math.min(100, tech)   * 0.40 +
-    Math.min(100, schema) * 0.20 +
-    Math.min(100, eeat)   * 0.25 +
-    Math.min(100, bing)   * 0.15
-  )
+  const eligibility = calcSearchEligibility(s)
+  const rawSeoFoundation = Math.round(Math.min(100, tech) * 0.70 + Math.min(100, schema) * 0.15 + Math.min(100, eeat) * 0.15)
+  const seoFoundation = eligibility.status === 'fail' ? Math.min(25, rawSeoFoundation) : rawSeoFoundation
 
   // AI Citation Readiness (Block 3 — 정적 분석 기반)
   const aiCitationReadiness = calcAiCitationReadiness(s)
 
   // 검색 자격 게이트 (Block 4)
-  const eligibility = calcSearchEligibility(s)
-
   // 측정 신뢰도 (Block 4)
   const confidence = calcMeasurementConfidence(s)
 
@@ -480,27 +440,33 @@ export function calcCategoryScore(s: PageSignals): CategoryScores {
     eeatScore:                 Math.min(100, eeat),
     academicGeoScore:          Math.min(100, geo),
     bingScore:                 Math.min(100, bing),
+    naverScore:                Math.min(100, naver),
     // v3 신규 필드
     seoFoundationScore:        seoFoundation,
     aiCitationReadinessScore:  aiCitationReadiness,
     searchEligibility:         eligibility,
     measurementConfidence:     confidence,
     schemaEvaluationLevel:     schemaLevel,
-    scoreModelVersion:         'v3.0',
+    scoreModelVersion:         'v0.6-r1',
   }
+}
+
+export function calcReadinessIndex(scores: CategoryScores, siteHealthScore?: number): number {
+  const dimensions = [
+    { value: scores.seoFoundationScore, weight: 0.55 },
+    { value: scores.aiCitationReadinessScore, weight: 0.25 },
+    { value: scores.naverScore, weight: 0.10 },
+  ]
+  if (typeof siteHealthScore === 'number') dimensions.push({ value: siteHealthScore, weight: 0.10 })
+  const weightTotal = dimensions.reduce((sum, item) => sum + item.weight, 0)
+  const index = Math.round(dimensions.reduce((sum, item) => sum + item.value * item.weight, 0) / weightTotal)
+  return scores.searchEligibility.status === 'fail' ? Math.min(25, index) : index
 }
 
 // ─── 규칙 기반 분석 결과 생성 (API 키 불필요) ───────────────────────────────
 
 export function generateRuleBasedResult(signals: PageSignals, scores: CategoryScores): Record<string, unknown> {
-  const overall = Math.round(
-    scores.technicalScore     * 0.20 +
-    scores.chatGptSearchScore * 0.18 +
-    scores.eeatScore          * 0.18 +
-    scores.academicGeoScore   * 0.16 +
-    scores.schemaScore        * 0.16 +
-    scores.bingScore          * 0.12
-  )
+  const overall = calcReadinessIndex(scores)
   const domain = signals.url.replace(/^https?:\/\//, '').split('/')[0]
   const rb = signals.robotsTxt.toLowerCase()
 
@@ -902,6 +868,60 @@ export function generateRuleBasedResult(signals: PageSignals, scores: CategorySc
     })
   }
 
+  // ── Naver Search readiness ────────────────────────────────────────────────
+  {
+    const yetiState = interpretBotAccess(rb, 'yeti')
+    const yetiOk = yetiState !== 'explicitly_blocked' && yetiState !== 'unknown'
+    criteria.push({
+      id: 'naver_yeti', name: '네이버 Yeti 수집 접근', category: 'naver',
+      score: yetiOk ? 100 : 0,
+      status: yetiOk ? 'pass' : 'fail',
+      weight: '높음',
+      scoringBasis: `robots.txt 규칙 해석 결과 Yeti는 ${yetiState === 'explicitly_blocked' ? '전체 차단' : yetiState === 'unknown' ? '확인 불가' : '수집 가능'} 상태입니다.`,
+      evaluationCriteria: '네이버 검색로봇 Yeti가 루트와 공개 콘텐츠에 접근할 수 있어야 합니다.',
+      currentState: `Yeti 접근: ${yetiOk ? '가능' : '차단 또는 확인 불가'}`,
+      improvement: yetiOk ? '현재 수집 접근 상태를 유지하세요.' : 'robots.txt에서 Yeti 또는 User-agent: *의 전체 차단 규칙을 제거하고 공개 경로를 허용하세요.',
+      priority: yetiOk ? 'low' : 'critical',
+      estimatedScoreGain: 0,
+      referenceGuide: 'Naver Search Advisor: https://searchadvisor.naver.com/guide/seo-basic-create',
+      codeSnippet: yetiOk ? undefined : 'User-agent: Yeti\nAllow: /',
+      codeType: 'robots',
+    })
+  }
+  {
+    const titleOk = signals.title.length > 0 && signals.title.length <= 40
+    const descOk = signals.metaDescription.length > 0 && signals.metaDescription.length <= 80
+    const metaOk = titleOk && descOk
+    criteria.push({
+      id: 'naver_meta', name: '네이버 Title·Description 권장 범위', category: 'naver',
+      score: (titleOk ? 50 : 0) + (descOk ? 50 : 0),
+      status: metaOk ? 'pass' : signals.title && signals.metaDescription ? 'warning' : 'fail',
+      weight: '중간',
+      scoringBasis: `Title ${signals.title.length}자, Description ${signals.metaDescription.length}자입니다.`,
+      evaluationCriteria: '네이버 사이트 간단 체크 권장: 제목 40자, 설명 80자 이내.',
+      currentState: `Title ${titleOk ? '권장 범위' : '조정 필요'} · Description ${descOk ? '권장 범위' : '조정 필요'}`,
+      improvement: '페이지 주제를 정확히 유지하면서 Title은 40자, Description은 80자 이내의 고유 문구로 작성하세요.',
+      priority: metaOk ? 'low' : 'medium',
+      estimatedScoreGain: 0,
+      referenceGuide: 'Naver Search Advisor: https://searchadvisor.naver.com/guide/diagnose-site',
+    })
+  }
+  {
+    criteria.push({
+      id: 'naver_feed', name: '네이버 Sitemap·RSS 제출 준비', category: 'naver',
+      score: signals.hasSitemap ? 100 : 0,
+      status: signals.hasSitemap ? 'pass' : 'warning',
+      weight: '중간',
+      scoringBasis: `robots.txt에서 Sitemap 선언 ${signals.hasSitemap ? '확인' : '미확인'}. 서치어드바이저 실제 제출 여부는 HTML 분석만으로 확인할 수 없습니다.`,
+      evaluationCriteria: '네이버는 Sitemap 또는 RSS를 콘텐츠 발견을 위한 피드로 안내합니다.',
+      currentState: signals.hasSitemap ? 'Sitemap 발견 · 실제 제출 여부 확인 필요' : 'Sitemap 미발견',
+      improvement: signals.hasSitemap ? '네이버 서치어드바이저에서 Sitemap 제출과 실제 수집·색인 상태를 확인하세요.' : 'Sitemap을 생성해 robots.txt에 선언하고 네이버 서치어드바이저에 제출하세요.',
+      priority: signals.hasSitemap ? 'low' : 'medium',
+      estimatedScoreGain: 0,
+      referenceGuide: 'Naver Search Advisor: https://searchadvisor.naver.com/guide/request-feed',
+    })
+  }
+
   // ── Analytics (GA4) - SEO 점수 영향 없음 ──────────────────────────────────
   {
     const ga4Ok = signals.hasGA4
@@ -942,23 +962,23 @@ export function generateRuleBasedResult(signals: PageSignals, scores: CategorySc
     .map(c => `[${c.name}] ${c.improvement}`)
 
   const quickWins = criteria
-    .filter(c => c.estimatedScoreGain >= 8 && c.status !== 'pass')
-    .sort((a, b) => b.estimatedScoreGain - a.estimatedScoreGain)
+    .filter(c => c.status !== 'pass')
+    .sort((a, b) => ({ critical: 0, high: 1, medium: 2, low: 3 }[a.priority] - { critical: 0, high: 1, medium: 2, low: 3 }[b.priority]))
     .slice(0, 4)
-    .map(c => `+${c.estimatedScoreGain}점: ${c.improvement.slice(0, 80)}`)
+    .map(c => `${c.priority === 'critical' || c.priority === 'high' ? '영향도 높음' : '영향도 중간'}: ${c.improvement.slice(0, 80)}`)
 
   const strengthSummary = passItems.slice(0, 4).map(c => `${c.name}: ${c.currentState}`)
 
-  const summary = `${domain}의 SEO+AEO 종합 점수는 ${overall}점입니다. ` +
+  const summary = `${domain}의 SEOGEO 자체 준비도 지수는 ${overall}점입니다. ` +
     (failItems.length > 0 ? `${failItems.map(c => c.name).join(', ')} 등 ${failItems.length}개 항목이 즉시 개선 필요합니다. ` : '') +
     (warnItems.length > 0 ? `${warnItems.length}개 항목은 개선 여지가 있으며 ` : '') +
     `${passItems.length}개 항목은 현재 기준을 충족합니다.`
 
   const ruleResults = criteria.map(c => ({
     ruleId: c.id,
-    ruleVersion: 'v3.0',
+    ruleVersion: 'v0.6-r1',
     title: c.name,
-    category: c.category as 'technical' | 'chatgpt' | 'geo' | 'eeat' | 'schema' | 'bing' | 'analytics',
+    category: c.category,
     status: (c.status === 'pass' ? 'pass' : c.status === 'fail' ? 'fail' : 'warning') as 'pass' | 'warning' | 'fail' | 'unknown' | 'not_applicable',
     severity: (c.priority === 'critical' ? 'critical' : c.priority === 'high' ? 'high' : c.priority === 'medium' ? 'medium' : 'low') as 'critical' | 'high' | 'medium' | 'low',
     applicable: true,
@@ -982,6 +1002,7 @@ export function generateRuleBasedResult(signals: PageSignals, scores: CategorySc
     eeatScore: scores.eeatScore,
     schemaScore: scores.schemaScore,
     bingScore: scores.bingScore,
+    naverScore: scores.naverScore,
     summary,
     criteria,
     ruleResults,
@@ -1017,18 +1038,11 @@ export async function runAnalysis(
   emit?.({ type: 'signals', data: signals, ts: now() })
 
   const scores = calcCategoryScore(signals)
-  const overall = Math.round(
-    scores.technicalScore     * 0.20 +
-    scores.chatGptSearchScore * 0.18 +
-    scores.eeatScore          * 0.18 +
-    scores.academicGeoScore   * 0.16 +
-    scores.schemaScore        * 0.16 +
-    scores.bingScore          * 0.12
-  )
+  const overall = calcReadinessIndex(scores, siteCrawl.healthScore)
 
   emit?.({
     type: 'step',
-    msg: `🧮 점수 계산 완료 — 종합: ${overall}점 | Tech: ${scores.technicalScore} | ChatGPT: ${scores.chatGptSearchScore} | GEO: ${scores.academicGeoScore} | E-E-A-T: ${scores.eeatScore} | Schema: ${scores.schemaScore} | Bing: ${scores.bingScore}`,
+    msg: `🧮 v0.6 준비도 계산 완료 — 자체 지수: ${overall}점 | SEO: ${scores.seoFoundationScore} | AI: ${scores.aiCitationReadinessScore} | Naver: ${scores.naverScore} | Site Health: ${siteCrawl.healthScore}`,
     level: 'success',
     ts: now(),
   })
@@ -1037,6 +1051,7 @@ export async function runAnalysis(
   if (!geminiKey) {
     emit?.({ type: 'step', msg: `📋 규칙 기반 SEO+AEO 분석 완료 (Gemini 키 없음 — 실측 데이터 기반)`, level: 'success', ts: now() })
     const result = generateRuleBasedResult(signals, scores)
+    result.overallScore = overall
     result.siteCrawl = siteCrawl
     return { result, signals }
   }
@@ -1085,7 +1100,7 @@ ${signals.robotsTxt.slice(0, 1500) || '없음'}
 
 === 계산된 점수 ===
 Technical: ${scores.technicalScore} | ChatGPT: ${scores.chatGptSearchScore} | GEO: ${scores.academicGeoScore}
-E-E-A-T: ${scores.eeatScore} | Schema: ${scores.schemaScore} | Bing: ${scores.bingScore} | 종합: ${overall}`
+E-E-A-T: ${scores.eeatScore} | Schema: ${scores.schemaScore} | Bing: ${scores.bingScore} | Naver: ${scores.naverScore} | 자체 준비도: ${overall}`
 
   const userPrompt = `${dataBlock}
 
@@ -1100,6 +1115,7 @@ E-E-A-T: ${scores.eeatScore} | Schema: ${scores.schemaScore} | Bing: ${scores.bi
   "eeatScore": ${scores.eeatScore},
   "schemaScore": ${scores.schemaScore},
   "bingScore": ${scores.bingScore},
+  "naverScore": ${scores.naverScore},
   "summary": "실측 데이터 기반 2-3문장 현황 요약",
   "criteria": [
     {
@@ -1123,7 +1139,7 @@ E-E-A-T: ${scores.eeatScore} | Schema: ${scores.schemaScore} | Bing: ${scores.bi
   "quickWins": ["빠른개선1", "빠른개선2"]
 }
 
-criteria 15개 필수: technical(3), chatgpt(2), geo(3), eeat(3), schema(2), bing(2)
+criteria는 실제 측정 근거가 있는 항목만 작성하며, 확인 불가 항목을 임의로 통과 또는 감점 처리하지 말 것.
 모든 scoringBasis에 실측 수치를 인용할 것.`
 
   const geminiRes = await fetch(GEMINI_URL, {
@@ -1142,6 +1158,7 @@ criteria 15개 필수: technical(3), chatgpt(2), geo(3), eeat(3), schema(2), bin
     const msg = errData.error?.message ?? `Gemini API 오류 (HTTP ${geminiRes.status})`
     emit?.({ type: 'step', msg: `⚠️ Gemini 오류: ${msg} — 규칙 기반 분석으로 전환`, level: 'warn', ts: now() })
     const result = generateRuleBasedResult(signals, scores)
+    result.overallScore = overall
     result.siteCrawl = siteCrawl
     return { result, signals }
   }
@@ -1168,6 +1185,7 @@ criteria 15개 필수: technical(3), chatgpt(2), geo(3), eeat(3), schema(2), bin
   result.eeatScore          = scores.eeatScore
   result.schemaScore        = scores.schemaScore
   result.bingScore          = scores.bingScore
+  result.naverScore         = scores.naverScore
   result.siteCrawl          = siteCrawl
 
   const criteriaCount = Array.isArray(result.criteria) ? result.criteria.length : 0

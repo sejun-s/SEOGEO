@@ -236,12 +236,12 @@ function CriteriaCard({ item, autoExpand }: { item: CriteriaItem; autoExpand?: b
             <CodeBlock code={item.codeSnippet} type={item.codeType} />
           )}
 
-          {/* Score gain */}
-          {item.estimatedScoreGain > 0 && (
+          {/* Impact level */}
+          {item.status !== 'pass' && (
             <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-slate-900 border border-slate-900">
               <TrendingUp className="w-4 h-4 text-white shrink-0" />
               <span className="text-xs text-white">
-                개선 완료 시 예상 점수 상승: <strong className="font-mono">+{item.estimatedScoreGain}점</strong>
+                개선 영향도: <strong>{item.priority === 'critical' || item.priority === 'high' ? '높음' : item.priority === 'medium' ? '중간' : '낮음'}</strong> · 실제 점수는 재검사 후 산정
               </span>
             </div>
           )}

@@ -303,17 +303,19 @@ body { background: #e8edf7; color: var(--v03-ink); letter-spacing: -.012em; }
 .v03-score-heading h1 { font-size: 21px; line-height: 1.35; font-weight: 800; color: var(--v03-ink); margin: 0 0 5px; }
 .v03-score-heading a { display: inline-flex; align-items: center; gap: 5px; color: #7b879b; font: 11px ui-monospace, monospace; }
 .v03-scan-date { font-size: 11px; color: #8a95a7; white-space: nowrap; }
-.v03-score-grid { display: grid; grid-template-columns: 1fr 1fr 1.35fr; gap: 14px; }
+.v03-score-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
 .v03-primary-score, .v03-radar-card { position: relative; min-height: 210px; padding: 20px; border-radius: 24px 24px 24px 9px; border: 1px solid #e2e7f5; background: #f2f5ff; overflow: hidden; }
 .v03-primary-score::after { content: ''; position: absolute; width: 110px; height: 110px; right: -42px; bottom: -50px; border-radius: 63% 37% 48% 52% / 45% 57% 43% 55%; background: rgba(79,109,245,.08); }
 .v03-primary-score.ai { background: #fff3ee; border-color: #f5dfd7; }
 .v03-primary-score.ai::after { background: rgba(255,126,104,.1); }
+.v03-primary-score.naver { background: #eef8f1; border-color: #d3e9da; }
+.v03-primary-score.naver::after { background: rgba(22,101,52,.08); }
 .v03-score-label { display: flex; gap: 7px; align-items: center; font-size: 12px; font-weight: 750; color: #526078; }
 .v03-score-number { color:#1b2559; font: 900 50px/1 ui-monospace, monospace; margin: 27px 0 12px; letter-spacing: -.05em; }
 .v03-score-number small { font-size: 12px; font-weight: 600; color: #9aa4b3; letter-spacing: 0; margin-left: 3px; }
 .v03-status-pill { display: inline-block; padding: 5px 9px; border-radius: 999px; font-size: 10px; font-weight: 800; }
 .v03-primary-score p, .v03-radar-card p { color: #7a879a; font-size: 11px; line-height: 1.55; margin: 13px 0 0; }
-.v03-radar-card { display: grid; grid-template-columns: .8fr 1.2fr; align-items: center; background: #fbfcff; }
+.v03-radar-card { display: grid; grid-column: 1 / -1; grid-template-columns: .45fr 1.55fr; align-items: center; background: #fbfcff; min-height: 180px; }
 .v03-card-title { color: var(--v03-ink); font-size: 13px; font-weight: 800; }
 .v03-radar { width: 100%; max-height: 180px; overflow: visible; }
 .v03-radar text { fill: #758196; font-size: 8px; font-weight: 650; }
