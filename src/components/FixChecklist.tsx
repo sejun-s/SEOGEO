@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import type { AuditResult, CriteriaItem } from '../types';
-import { CheckSquare, Square, RefreshCw, Sparkles, Copy, Check, ListChecks } from 'lucide-react';
+import { CheckSquare, Square, RefreshCw, Sparkles, Copy, Check, ListChecks, ChevronDown, ChevronUp } from 'lucide-react';
 
 const PRIORITY_LABEL: Record<string, { label: string; cls: string }> = {
   critical: { label: '즉시', cls: 'bg-rose-500/15 text-rose-400 border-rose-500/25' },
@@ -11,7 +11,7 @@ const PRIORITY_LABEL: Record<string, { label: string; cls: string }> = {
 
 const CATEGORY_LABEL: Record<string, string> = {
   technical: 'Technical', chatgpt: 'ChatGPT', geo: 'GEO',
-  eeat: 'E-E-A-T', schema: 'Schema', bing: 'Bing/AEO',
+  eeat: '신뢰 신호', schema: 'Schema', bing: 'Bing', naver: 'Naver',
 };
 
 function CodeSnippet({ code, codeType }: { code: string; codeType?: string }) {
@@ -21,15 +21,15 @@ function CodeSnippet({ code, codeType }: { code: string; codeType?: string }) {
   });
   const label = codeType === 'robots' ? 'robots.txt' : codeType === 'json' ? 'JSON-LD' : 'HTML';
   return (
-    <div className="mt-2 rounded-lg overflow-hidden border border-white/8">
-      <div className="flex items-center justify-between px-2.5 py-1.5 bg-slate-900/80 border-b border-white/6">
-        <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider">{label}</span>
-        <button onClick={copy} className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-white/8 hover:bg-white/14 text-slate-400 hover:text-white transition-all">
+    <div className="mt-2 rounded-lg overflow-hidden border border-slate-300 bg-white shadow-sm">
+      <div className="flex items-center justify-between px-3 py-2 bg-slate-100 border-b border-slate-300">
+        <span className="text-[10px] font-mono font-semibold text-slate-700 uppercase tracking-wider">{label} — 복사 후 붙여넣기</span>
+        <button onClick={copy} className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-md bg-white border border-slate-300 text-slate-700 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-800 transition-all">
           {copied ? <Check className="w-2.5 h-2.5 text-emerald-400" /> : <Copy className="w-2.5 h-2.5" />}
           {copied ? '복사됨' : '복사'}
         </button>
       </div>
-      <pre className="p-3 text-[10px] font-mono text-slate-400 overflow-x-auto whitespace-pre-wrap leading-relaxed bg-slate-950/50">
+      <pre className="p-4 text-[12px] font-mono text-slate-900 overflow-x-auto whitespace-pre-wrap leading-6 bg-white selection:bg-blue-200">
         {code}
       </pre>
     </div>
@@ -45,10 +45,45 @@ interface Props {
 export const FixChecklist: React.FC<Props> = ({ audit, onReanalyze, isScanning }) => {
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [showAll, setShowAll] = useState(false);
 
-  const items: CriteriaItem[] = (audit.criteria ?? [])
-    .filter((c) => c.status !== 'pass')
-    .sort((a, b) => ({ critical: 0, high: 1, medium: 2, low: 3 }[a.priority] - { critical: 0, high: 1, medium: 2, low: 3 }[b.priority]));
+  useEffect(() => {
+    setChecked(new Set());
+    setExpanded(new Set());
+    setShowAll(false);
+  }, [audit.url]);
+
+  const items = useMemo(() => {
+    const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9가-힣]/g, '');
+    const criteria = (audit.criteria ?? []).filter(item => item.status !== 'pass');
+    const known = new Set(criteria.flatMap(item => [normalize(item.id), normalize(item.name), normalize(item.improvement.split('\n')[0])]));
+
+    const legacy: CriteriaItem[] = (audit.metrics ?? [])
+      .filter(metric => metric.status !== 'pass')
+      .filter(metric => ![normalize(metric.id), normalize(metric.title), normalize(metric.recommendation.split('\n')[0])].some(key => key && known.has(key)))
+      .map(metric => ({
+        id: `metric-${metric.id}`,
+        name: metric.title,
+        category: metric.category,
+        score: metric.score,
+        status: metric.status,
+        weight: metric.scoreBoost > 10 ? '높음' : metric.scoreBoost > 0 ? '중간' : '낮음',
+        scoringBasis: metric.currentValue,
+        evaluationCriteria: metric.referenceDoc ?? '기존 진단 규칙',
+        currentState: metric.currentValue,
+        improvement: metric.recommendation,
+        priority: metric.status === 'fail' ? (metric.score <= 40 ? 'critical' : 'high') : 'medium',
+        estimatedScoreGain: metric.scoreBoost,
+        referenceGuide: metric.referenceDoc ?? '기존 진단 규칙',
+        codeSnippet: metric.codeSnippet,
+        codeType: metric.codeSnippet?.includes('User-agent:') ? 'robots' : metric.codeSnippet?.includes('application/ld+json') ? 'json' : metric.codeSnippet ? 'html' : undefined,
+      }));
+
+    return [...criteria, ...legacy]
+      .sort((a, b) => ({ critical: 0, high: 1, medium: 2, low: 3 }[a.priority] - { critical: 0, high: 1, medium: 2, low: 3 }[b.priority] || b.estimatedScoreGain - a.estimatedScoreGain));
+  }, [audit.criteria, audit.metrics]);
+
+  const visibleItems = showAll ? items : items.slice(0, 7);
 
   if (items.length === 0) return null;
 
@@ -73,8 +108,8 @@ export const FixChecklist: React.FC<Props> = ({ audit, onReanalyze, isScanning }
         <div className="flex items-center gap-2.5">
           <ListChecks className="w-4 h-4 text-emerald-400 shrink-0" />
           <div>
-            <div className="text-sm font-semibold text-white">수정 체크리스트</div>
-            <div className="text-[11px] text-slate-500 mt-0.5">수정 완료한 항목 체크 → 재검증 실행</div>
+            <div className="text-sm font-semibold text-white">개선 액션</div>
+            <div className="text-[11px] text-slate-500 mt-0.5">중요한 문제부터 수정하고 바로 재검사하세요</div>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -110,11 +145,11 @@ export const FixChecklist: React.FC<Props> = ({ audit, onReanalyze, isScanning }
 
       {/* Items */}
       <div className="space-y-1.5">
-        {items.map((item) => {
+        {visibleItems.map((item) => {
           const done = checked.has(item.id);
           const open = expanded.has(item.id);
           const p = PRIORITY_LABEL[item.priority];
-          const impactText = item.priority === 'critical' ? '영향도 높음 🔥' : item.priority === 'high' ? '영향도 중간 ⚡' : '영향도 보통 💡';
+          const impactText = item.priority === 'critical' || item.priority === 'high' ? '영향도 높음' : item.priority === 'medium' ? '영향도 중간' : '영향도 낮음';
           return (
             <div
               key={item.id}
@@ -166,6 +201,15 @@ export const FixChecklist: React.FC<Props> = ({ audit, onReanalyze, isScanning }
           );
         })}
       </div>
+
+      {items.length > 7 && (
+        <button
+          onClick={() => setShowAll(value => !value)}
+          className="w-full py-2.5 rounded-xl border border-slate-300 bg-slate-50 text-xs font-bold text-slate-800 hover:bg-slate-100 flex items-center justify-center gap-1.5 transition-colors"
+        >
+          {showAll ? <><ChevronUp className="w-4 h-4" /> 중요 항목만 보기</> : <><ChevronDown className="w-4 h-4" /> 전체 {items.length}개 개선 항목 보기</>}
+        </button>
+      )}
     </div>
   );
 };

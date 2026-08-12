@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS analysis_runs (
     normalized_url TEXT,
     status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'partial_success', 'completed', 'failed', 'cancelled')),
     analysis_type TEXT NOT NULL DEFAULT 'single_page',
-    score_model_version TEXT DEFAULT 'v3.0',
+    score_model_version TEXT DEFAULT 'v0.6-r1',
     crawler_version TEXT DEFAULT 'v1.0',
     requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     started_at TIMESTAMPTZ,
@@ -155,7 +155,7 @@ CREATE TABLE IF NOT EXISTS rules (
     category TEXT NOT NULL,
     evidence_type TEXT NOT NULL,
     official_source_url TEXT,
-    current_version TEXT NOT NULL DEFAULT 'v3.0',
+    current_version TEXT NOT NULL DEFAULT 'v0.6-r1',
     active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -202,7 +202,7 @@ CREATE INDEX IF NOT EXISTS idx_rule_results_run_id ON rule_results(analysis_run_
 CREATE TABLE IF NOT EXISTS score_results (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     analysis_run_id UUID REFERENCES analysis_runs(id) ON DELETE CASCADE,
-    model_version TEXT NOT NULL DEFAULT 'v3.0',
+    model_version TEXT NOT NULL DEFAULT 'v0.6-r1',
     search_eligibility TEXT NOT NULL,
     seo_foundation_score NUMERIC,
     ai_citation_readiness_score NUMERIC,

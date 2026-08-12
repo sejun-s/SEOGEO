@@ -153,10 +153,12 @@ type Errors = Partial<Record<InsightPersona, string>>
 
 export const InsightPanel: React.FC<Props> = ({ audit }) => {
   const [selected, setSelected] = useState<InsightPersona>('marketer')
-  const [loading, setLoading] = useState<InsightPersona | null>(null)
+  const [loading, setLoading] = useState<Set<InsightPersona>>(new Set())
   const [cache, setCache] = useState<Cache>({})
   const [errors, setErrors] = useState<Errors>({})
   const [ctx, setCtx] = useState<SiteContext>({ description: '', purpose: [], targetAudience: '' })
+  const [descriptionDraft, setDescriptionDraft] = useState('')
+  const [targetAudienceDraft, setTargetAudienceDraft] = useState('')
   const [ctxDirty, setCtxDirty] = useState(false) // context changed since last generation
 
   // Load saved context when audit changes
@@ -164,38 +166,46 @@ export const InsightPanel: React.FC<Props> = ({ audit }) => {
     if (!audit) return
     setCache({})
     setErrors({})
+    setLoading(new Set())
     setSelected('marketer')
-    setCtx(loadCtx(audit.url))
+    const saved = loadCtx(audit.url)
+    setCtx(saved)
+    setDescriptionDraft(saved.description)
+    setTargetAudienceDraft(saved.targetAudience)
     setCtxDirty(false)
   }, [audit])
 
   const generate = useCallback(async (persona: InsightPersona, auditData: AuditResult, siteCtx: SiteContext) => {
-    setLoading(persona)
+    setLoading(current => new Set(current).add(persona))
     setErrors(e => ({ ...e, [persona]: undefined }))
-    setCtxDirty(false)
     try {
       const data = await analyzeIndustry(auditData, persona, siteCtx)
       setCache(c => ({ ...c, [persona]: data }))
     } catch (err) {
       setErrors(e => ({ ...e, [persona]: String(err) }))
     } finally {
-      setLoading(null)
+      setLoading(current => {
+        const next = new Set(current)
+        next.delete(persona)
+        return next
+      })
     }
   }, [])
 
-  // Auto-generate when persona selected (if not cached)
-  useEffect(() => {
-    if (!audit) return
-    if (cache[selected] || loading === selected) return
-    generate(selected, audit, ctx)
-  }, [selected, audit, cache, loading, generate, ctx])
+  const generateAll = useCallback(async (siteCtx: SiteContext) => {
+    if (!audit || !siteCtx.description.trim()) return
+    setCache({})
+    setErrors({})
+    await Promise.all(PERSONAS.map(persona => generate(persona.id, audit, siteCtx)))
+    setCtxDirty(false)
+  }, [audit, generate])
 
   const handleSelect = (persona: InsightPersona) => setSelected(persona)
 
   const handleRetry = () => {
     if (!audit) return
     setCache(c => ({ ...c, [selected]: undefined }))
-    generate(selected, audit, ctx)
+    void generate(selected, audit, ctx)
   }
 
   const updateCtx = (patch: Partial<SiteContext>) => {
@@ -215,6 +225,48 @@ export const InsightPanel: React.FC<Props> = ({ audit }) => {
     updateCtx({ purpose: next })
   }
 
+  const commitDraft = (field: 'description' | 'targetAudience'): SiteContext => {
+    let next = ctx
+    if (field === 'description') {
+      const value = descriptionDraft.trim()
+      setDescriptionDraft(value)
+      if (value !== ctx.description) {
+        next = { ...ctx, description: value }
+        setCtx(next)
+        if (audit) saveCtx(audit.url, next)
+        setCtxDirty(true)
+      }
+    }
+    if (field === 'targetAudience') {
+      const value = targetAudienceDraft.trim()
+      setTargetAudienceDraft(value)
+      if (value !== ctx.targetAudience) {
+        next = { ...ctx, targetAudience: value }
+        setCtx(next)
+        if (audit) saveCtx(audit.url, next)
+        setCtxDirty(true)
+      }
+    }
+    return next
+  }
+
+  const commitAllDrafts = (): SiteContext => {
+    const next = { ...ctx, description: descriptionDraft.trim(), targetAudience: targetAudienceDraft.trim() }
+    setDescriptionDraft(next.description)
+    setTargetAudienceDraft(next.targetAudience)
+    setCtx(next)
+    if (audit) saveCtx(audit.url, next)
+    if (next.description !== ctx.description || next.targetAudience !== ctx.targetAudience) setCtxDirty(true)
+    return next
+  }
+
+  const commitOnEnter = (event: React.KeyboardEvent<HTMLTextAreaElement | HTMLInputElement>, field: 'description' | 'targetAudience') => {
+    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing) return
+    event.preventDefault()
+    const next = field === 'description' ? commitAllDrafts() : commitDraft(field)
+    if (next.description) void generateAll(next)
+  }
+
   if (!audit) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
@@ -230,7 +282,8 @@ export const InsightPanel: React.FC<Props> = ({ audit }) => {
   }
 
   const result = cache[selected]
-  const isLoading = loading === selected
+  const isLoading = loading.has(selected)
+  const isAnyLoading = loading.size > 0
   const error = errors[selected]
   const selectedDef = PERSONAS.find(p => p.id === selected)!
   const hasCtx = !!(ctx.description || ctx.purpose.length || ctx.targetAudience)
@@ -257,17 +310,18 @@ export const InsightPanel: React.FC<Props> = ({ audit }) => {
       <div className="glass-card p-4 space-y-4">
         <div className="flex items-center gap-2">
           <Info className="w-3.5 h-3.5 text-slate-500 shrink-0" />
-          <span className="text-xs font-semibold text-slate-300">사이트 정보</span>
-          <span className="text-[10px] text-slate-600 ml-auto">입력할수록 인사이트가 정확해집니다</span>
+          <span className="text-xs font-semibold text-slate-300">회사 정보</span>
+          <span className="text-[10px] text-slate-600 ml-auto">회사 소개를 입력하면 3개 관점이 동시에 분석합니다</span>
         </div>
 
         {/* Description */}
         <div className="space-y-1.5">
-          <label className="text-[11px] text-slate-500 font-medium">사이트 소개</label>
+          <div className="flex items-center justify-between"><label className="text-[11px] text-slate-500 font-medium">회사 소개 <b className="text-rose-400">필수</b></label><span className="text-[9px] text-slate-500">Enter로 AI 분석 · Shift+Enter 줄바꿈</span></div>
           <textarea
-            value={ctx.description}
-            onChange={e => updateCtx({ description: e.target.value })}
-            placeholder="예: 중소기업 대상 ERP SaaS 솔루션을 제공하는 B2B 서비스입니다"
+            value={descriptionDraft}
+            onChange={e => setDescriptionDraft(e.target.value)}
+            onKeyDown={e => commitOnEnter(e, 'description')}
+            placeholder="예: 중소기업에 온톨로지 기반 데이터·AI 솔루션을 제공하는 B2B 기업입니다"
             rows={2}
             className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-500/40 focus:bg-white/8 resize-none transition-all"
           />
@@ -295,20 +349,33 @@ export const InsightPanel: React.FC<Props> = ({ audit }) => {
 
         {/* Target audience */}
         <div className="space-y-1.5">
-          <label className="text-[11px] text-slate-500 font-medium">타겟 고객</label>
+          <div className="flex items-center justify-between"><label className="text-[11px] text-slate-500 font-medium">타겟 고객</label><span className="text-[9px] text-slate-500">Enter로 적용</span></div>
           <input
             type="text"
-            value={ctx.targetAudience}
-            onChange={e => updateCtx({ targetAudience: e.target.value })}
+            value={targetAudienceDraft}
+            onChange={e => setTargetAudienceDraft(e.target.value)}
+            onKeyDown={e => commitOnEnter(e, 'targetAudience')}
             placeholder="예: 50인 이상 중소기업 재무/IT 담당자"
             className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-500/40 focus:bg-white/8 transition-all"
           />
         </div>
 
-        {ctxDirty && hasCtx && (
+        <button
+          onClick={() => { const next = commitAllDrafts(); if (next.description) void generateAll(next) }}
+          disabled={!descriptionDraft.trim() || isAnyLoading}
+          className="btn-purple w-full min-h-11 text-xs"
+        >
+          {isAnyLoading ? <><Loader2 className="w-4 h-4 animate-spin" /> 3개 관점 분석 중...</> : <><Sparkles className="w-4 h-4" /> 3개 관점 AI 조언 생성</>}
+        </button>
+
+        {!descriptionDraft.trim() && (
+          <div className="text-[10px] text-slate-500 flex items-center gap-1.5"><Info className="w-3 h-3" />회사 소개를 입력해야 AI 인사이트가 활성화됩니다.</div>
+        )}
+
+        {ctxDirty && hasCtx && !isAnyLoading && (
           <div className="text-[10px] text-amber-400/70 flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-400/70 shrink-0" />
-            정보가 변경됐습니다 — 페르소나를 클릭하면 새로운 인사이트를 생성합니다
+            정보가 변경됐습니다 — Enter 또는 생성 버튼으로 세 관점을 다시 분석하세요
           </div>
         )}
       </div>
@@ -318,12 +385,12 @@ export const InsightPanel: React.FC<Props> = ({ audit }) => {
         {PERSONAS.map(p => {
           const isSelected = selected === p.id
           const isDone = !!cache[p.id]
-          const isGen = loading === p.id
+          const isGen = loading.has(p.id)
           return (
             <button
               key={p.id}
               onClick={() => handleSelect(p.id)}
-              disabled={isGen}
+              disabled={isGen || !ctx.description}
               className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold border transition-all duration-200 ${
                 isSelected
                   ? `${p.cardBg} ${p.accent} ring-1 text-white`
@@ -357,8 +424,25 @@ export const InsightPanel: React.FC<Props> = ({ audit }) => {
         </div>
       )}
 
+      {/* Activation gate */}
+      {!ctx.description && !isLoading && (
+        <div className="glass-card p-8 flex flex-col items-center gap-3 text-center">
+          <div className="w-11 h-11 rounded-xl bg-blue-500/10 flex items-center justify-center"><Sparkles className="w-5 h-5 text-blue-500" /></div>
+          <div><div className="text-sm font-semibold text-white">AI 인사이트를 활성화하세요</div><div className="text-xs text-slate-400 mt-1">회사 소개를 입력하면 마케터·경영자·운영자 관점의 조언을 동시에 생성합니다.</div></div>
+        </div>
+      )}
+
+      {/* Error */}
+      {!isLoading && error && (
+        <div className="glass-card p-6 border border-rose-500/20 text-center">
+          <div className="text-sm font-semibold text-white">{selectedDef.title} 인사이트를 생성하지 못했습니다</div>
+          <div className="text-xs text-slate-500 mt-2">{error.includes('API key') ? '설정에서 Gemini API 키를 등록한 뒤 다시 시도하세요.' : error}</div>
+          <button onClick={handleRetry} className="btn-purple text-xs px-4 py-2 mt-4"><RefreshCw className="w-3.5 h-3.5" /> 다시 시도</button>
+        </div>
+      )}
+
       {/* Initial Empty State */}
-      {!isLoading && !result && !error && (
+      {ctx.description && !isLoading && !result && !error && (
         <div className="glass-card p-8 flex flex-col items-center gap-3.5 text-center">
           <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${selectedDef.iconBg} flex items-center justify-center text-white`}>
             {selectedDef.icon}

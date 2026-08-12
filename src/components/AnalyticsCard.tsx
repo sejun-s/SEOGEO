@@ -14,7 +14,7 @@ function CopyBtn({ text }: { text: string }) {
   return (
     <button
       onClick={() => navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); })}
-      className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-white/8 hover:bg-white/14 text-slate-400 hover:text-white transition-all"
+      className="flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-md bg-white border border-slate-300 text-slate-700 hover:bg-blue-50 hover:text-blue-900 transition-all"
     >
       {copied ? <Check className="w-2.5 h-2.5 text-emerald-400" /> : <Copy className="w-2.5 h-2.5" />}
       {copied ? '복사됨' : '복사'}
@@ -73,11 +73,11 @@ export const AnalyticsCard: React.FC<Props> = ({ signals }) => {
     <div className="glass-card overflow-hidden">
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/3 transition-colors"
+        className={`w-full flex items-center justify-between px-5 py-3.5 bg-slate-50 hover:bg-slate-100 transition-colors ${open ? 'border-b border-slate-200' : ''}`}
       >
         <div className="flex items-center gap-2.5">
-          <BarChart3 className="w-4 h-4 text-blue-400 shrink-0" />
-          <span className="text-sm font-semibold text-white">분석 도구 감지</span>
+          <span className="w-8 h-8 rounded-lg bg-white border border-slate-200 grid place-items-center shadow-sm"><BarChart3 className="w-4 h-4 text-blue-800" /></span>
+          <span className="text-sm font-extrabold text-slate-900">분석 도구 감지</span>
           {!open && (
             <span className={`text-[11px] ml-1 ${headerCls}`}>{statusLine}</span>
           )}
@@ -86,7 +86,7 @@ export const AnalyticsCard: React.FC<Props> = ({ signals }) => {
       </button>
 
       {open && (
-        <div className="px-5 pb-5 border-t border-white/8 pt-4 space-y-4 animate-fadeIn">
+        <div className="px-5 pb-5 pt-4 space-y-4 animate-fadeIn">
           {/* Tool status grid */}
           <div className="grid sm:grid-cols-2 gap-x-8">
             <div className="space-y-0 divide-y divide-white/5">
@@ -122,12 +122,12 @@ export const AnalyticsCard: React.FC<Props> = ({ signals }) => {
 
           {/* GA4 not installed → show install guide */}
           {!signals.hasGA4 && (
-            <div className="rounded-xl border border-white/8 overflow-hidden">
-              <div className="flex items-center justify-between px-3 py-2 bg-slate-900/60 border-b border-white/6">
-                <span className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">GA4 설치 코드</span>
+            <div className="rounded-xl border border-slate-300 overflow-hidden bg-white">
+              <div className="flex items-center justify-between px-3 py-2 bg-slate-100 border-b border-slate-300">
+                <span className="text-[11px] font-mono font-bold text-slate-700 uppercase tracking-wider">GA4 설치 코드</span>
                 <CopyBtn text={GA4_SNIPPET()} />
               </div>
-              <pre className="p-3 text-[10px] font-mono text-slate-400 overflow-x-auto whitespace-pre-wrap leading-relaxed bg-slate-950/40">
+              <pre className="p-4 text-[12px] font-mono text-slate-900 overflow-x-auto whitespace-pre-wrap leading-6 bg-white">
                 {GA4_SNIPPET()}
               </pre>
             </div>

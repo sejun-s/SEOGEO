@@ -18,7 +18,7 @@ export interface BotPermissionPolicy {
 export interface MetricItem {
   id: string;
   title: string;
-  category: 'technical' | 'chatgpt' | 'geo' | 'eeat' | 'schema' | 'bing' | 'analytics';
+  category: 'technical' | 'chatgpt' | 'geo' | 'eeat' | 'schema' | 'bing' | 'naver' | 'analytics';
   status: 'pass' | 'warning' | 'fail';
   score: number;
   scoreBoost: number;
@@ -41,7 +41,7 @@ export interface ScoreHistoryEntry {
 export interface CriteriaItem {
   id: string;
   name: string;
-  category: 'technical' | 'chatgpt' | 'geo' | 'eeat' | 'schema' | 'bing' | 'analytics';
+  category: 'technical' | 'chatgpt' | 'geo' | 'eeat' | 'schema' | 'bing' | 'naver' | 'analytics';
   score: number;
   status: 'pass' | 'warning' | 'fail';
   weight: '높음' | '중간' | '낮음' | '참고 (SEO 점수 미영향)';
@@ -71,7 +71,7 @@ export interface RuleResult {
   ruleId: string;
   ruleVersion: string;
   title: string;
-  category: 'technical' | 'chatgpt' | 'geo' | 'eeat' | 'schema' | 'bing' | 'analytics';
+  category: 'technical' | 'chatgpt' | 'geo' | 'eeat' | 'schema' | 'bing' | 'naver' | 'analytics';
   status: 'pass' | 'warning' | 'fail' | 'unknown' | 'not_applicable';
   severity: 'critical' | 'high' | 'medium' | 'low';
   applicable: boolean;
@@ -112,10 +112,11 @@ export interface AuditResult {
   eeatScore: number;
   schemaScore: number;
   bingScore: number;
+  naverScore?: number;
   lastScanned: string;
 
   // Block 4 & v3: 점수 모델 필드
-  scoreModelVersion?: string       // 예: "v3.0"
+  scoreModelVersion?: string       // 예: "v0.6-r1"
   legacyScore?: number             // overallScore의 legacy 복사본
   searchEligibility?: SearchEligibilityResult
   seoFoundationScore?: number      // SEO Foundation 독립 점수 (0-100)
@@ -126,6 +127,7 @@ export interface AuditResult {
 
   // 실제 URL에서 추출한 신호 (스트리밍 분석 시 채워짐)
   pageSignals?: PageSignals;
+  siteCrawl?: SiteCrawlResult;
 
   // AI 분석 결과 (새 구조)
   summary?: string;
@@ -239,9 +241,77 @@ export interface AIAnalysisResponse {
   eeatScore: number;
   schemaScore: number;
   bingScore: number;
+  naverScore?: number;
   summary: string;
   criteria: CriteriaItem[];
   strengthSummary: string[];
   criticalIssues: string[];
   quickWins: string[];
+  siteCrawl?: SiteCrawlResult;
+}
+
+export interface CrawlPageResult {
+  url: string;
+  depth: number;
+  statusCode: number;
+  redirected: boolean;
+  responseTime: number;
+  title: string;
+  metaDescription: string;
+  canonical: string;
+  h1Count: number;
+  wordCount: number;
+  internalLinks: string[];
+  noindex: boolean;
+  hasSchema: boolean;
+  error?: string;
+}
+
+export interface SiteCrawlIssue {
+  id: string;
+  severity: 'error' | 'warning' | 'notice';
+  title: string;
+  count: number;
+  urls: string[];
+  recommendation: string;
+  scoreImpact: number;
+  verification: string;
+}
+
+export interface CrawlScoreFactor {
+  issueId: string;
+  label: string;
+  maxPenalty: number;
+  appliedPenalty: number;
+  affectedPages: number;
+  affectedRatio: number;
+}
+
+export interface SiteCrawlComparison {
+  previousHealthScore: number;
+  healthScoreDelta: number;
+  resolvedIssueIds: string[];
+  newIssueIds: string[];
+  improvedIssueIds: string[];
+  regressedIssueIds: string[];
+}
+
+export interface SiteCrawlResult {
+  startedAt: string;
+  completedAt: string;
+  durationMs: number;
+  scannedPages: number;
+  discoveredUrls: number;
+  healthyPages: number;
+  errorCount: number;
+  warningCount: number;
+  healthScore: number;
+  scoreModelVersion: string;
+  scoreFactors: CrawlScoreFactor[];
+  truncated: boolean;
+  blockedByRobots: number;
+  limits: { maxPages: number; maxDepth: number; concurrency: number };
+  pages: CrawlPageResult[];
+  issues: SiteCrawlIssue[];
+  comparison?: SiteCrawlComparison;
 }

@@ -120,6 +120,7 @@ function mapAIResponseToAudit(url: string, ai: AIAnalysisResponse, signals?: Pag
     eeatScore: ai.eeatScore,
     schemaScore: ai.schemaScore,
     bingScore: ai.bingScore,
+    naverScore: ai.naverScore ?? (signals ? calcCategoryScore(signals).naverScore : undefined),
     lastScanned: now,
     summary: ai.summary,
     criteria: ai.criteria,
@@ -127,11 +128,12 @@ function mapAIResponseToAudit(url: string, ai: AIAnalysisResponse, signals?: Pag
     criticalIssues: ai.criticalIssues,
     quickWins: ai.quickWins,
     pageSignals: signals,
+    siteCrawl: ai.siteCrawl,
     // v3 점수 모델 필드 (signals가 있을 때만)
     ...(signals ? (() => {
       const v3 = calcCategoryScore(signals)
       return {
-        scoreModelVersion: 'v3.0',
+        scoreModelVersion: 'v0.6-r1',
         legacyScore: ai.overallScore,
         searchEligibility: v3.searchEligibility,
         seoFoundationScore: v3.seoFoundationScore as number,
@@ -152,6 +154,7 @@ function mapAIResponseToAudit(url: string, ai: AIAnalysisResponse, signals?: Pag
     botPolicies: [
       { botName: 'OAI-SearchBot', purpose: 'ChatGPT Search', status: signals?.robotsTxt?.toLowerCase().includes('oai-searchbot') ? 'allowed' : 'missing', impact: 'ChatGPT 답변 출처 노출', recommendation: '허용 유지' },
       { botName: 'Googlebot', purpose: 'Google 색인', status: 'allowed', impact: 'Google AI Overviews', recommendation: '허용 유지' },
+      { botName: 'Yeti', purpose: '네이버 검색 수집', status: signals?.robotsTxt?.toLowerCase().includes('disallow: /') ? 'blocked' : 'allowed', impact: '네이버 웹 검색 수집 가능성', recommendation: '서치어드바이저에서 실제 수집·색인 여부 확인' },
     ],
     geoFactors: (ai.criteria ?? []).filter(c => c.category === 'geo').map(c => ({
       name: c.name, score: c.score,
@@ -181,7 +184,7 @@ function mapAIResponseToAudit(url: string, ai: AIAnalysisResponse, signals?: Pag
       chatGptSearchSnippet: '',
       googleAiOverviewSnippet: '',
       perplexitySnippet: '',
-      citationProbable: ai.overallScore >= 70,
+      citationProbable: false,
       citedUrl: url,
       citedAnchorText: domain,
       keyFactExtractor: ai.quickWins || [],

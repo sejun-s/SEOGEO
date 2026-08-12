@@ -19,7 +19,7 @@ export const Header: React.FC<HeaderProps> = ({ onScanUrl, isScanning }) => {
   };
 
   return (
-    <header className="border-b border-white/10 bg-slate-950/70 backdrop-blur-2xl sticky top-0 z-40">
+    <header className="v03-header sticky top-0 z-40">
       <div className="px-4 py-3">
         <form onSubmit={handleSubmit} className="flex items-center gap-2 max-w-2xl mx-auto">
           <div className="relative flex-1">

@@ -44,12 +44,12 @@ export const GA4AccountCard: React.FC<Props> = ({ signals }) => {
     account.measurementId.toUpperCase() === detectedId.toUpperCase();
 
   return (
-    <div className="glass-card p-5 space-y-5">
+    <div className="glass-card overflow-hidden">
       {/* Header */}
-      <div className="flex items-center gap-2.5">
-        <KeyRound className="w-4 h-4 text-purple-400 shrink-0" />
+      <div className="flex items-center gap-3 px-5 py-4 bg-slate-50 border-b border-slate-200">
+        <span className="w-8 h-8 rounded-lg bg-white border border-slate-200 grid place-items-center shadow-sm"><KeyRound className="w-4 h-4 text-blue-800" /></span>
         <div>
-          <div className="text-sm font-semibold text-white">GA4 계정 입력</div>
+          <div className="text-sm font-extrabold text-slate-900">GA4 계정 입력</div>
           <div className="text-[11px] text-slate-500 mt-0.5">
             Measurement ID와 Property ID를 등록하면 심층 데이터 연동이 가능합니다
           </div>
@@ -57,7 +57,7 @@ export const GA4AccountCard: React.FC<Props> = ({ signals }) => {
       </div>
 
       {/* Fields */}
-      <div className="space-y-4">
+      <div className="p-5 space-y-4">
         {/* Measurement ID */}
         <div>
           <label className="text-[11px] text-slate-400 font-medium block mb-1.5">
@@ -121,8 +121,8 @@ export const GA4AccountCard: React.FC<Props> = ({ signals }) => {
       </div>
 
       {/* What this enables */}
-      <div className="p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/15 space-y-1.5">
-        <div className="text-[11px] font-semibold text-indigo-300">입력 후 연동 가능한 데이터</div>
+      <div className="mx-5 p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+        <div className="text-[11px] font-extrabold text-slate-900">입력 후 연동 가능한 데이터</div>
         <div className="text-[11px] text-slate-400 space-y-1">
           <div>• 세션 수 · 사용자 수 · 이탈률</div>
           <div>• 상위 방문 페이지 및 채널별 트래픽</div>
@@ -134,7 +134,7 @@ export const GA4AccountCard: React.FC<Props> = ({ signals }) => {
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 px-5 py-4 mt-5 border-t border-slate-200 bg-slate-50">
         <button
           onClick={handleSave}
           className="btn-purple text-xs px-4 py-2 gap-1.5 !rounded-xl flex-1"

@@ -7,7 +7,6 @@ import { AcademicGeoTab } from './Tabs/AcademicGeoTab';
 import { SchemaGeneratorTab } from './Tabs/SchemaGeneratorTab';
 import { AEOCitationTab } from './Tabs/AEOCitationTab';
 import { CMSApplyTab } from './Tabs/CMSApplyTab';
-import { AnalysisSummaryTable } from './AnalysisSummaryTable';
 import { ArrowLeft, BookOpen, ShieldCheck, Database, Zap, Cpu, Bot } from 'lucide-react';
 
 interface DetailPageProps {
@@ -15,7 +14,6 @@ interface DetailPageProps {
   activeTab: DetailTabType;
   onSelectTab: (tab: DetailTabType) => void;
   onBackToOverview: () => void;
-  onToggleFix: (metricId: string) => void;
   autoExpandId?: string;
 }
 
@@ -33,7 +31,6 @@ export const DetailPage: React.FC<DetailPageProps> = ({
   activeTab,
   onSelectTab,
   onBackToOverview,
-  onToggleFix,
   autoExpandId,
 }) => {
   const activeTabConfig = TABS.find((t) => t.id === activeTab);
@@ -107,10 +104,6 @@ export const DetailPage: React.FC<DetailPageProps> = ({
           </div>
         </div>
 
-        {/* Metrics Summary Table */}
-        {audit.metrics && audit.metrics.length > 0 && (
-          <AnalysisSummaryTable audit={audit} onToggleFix={onToggleFix} />
-        )}
       </div>
     </div>
   );

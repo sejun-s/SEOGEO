@@ -15,18 +15,18 @@ function CodeBlock({ code, type }: { code: string; type?: string }) {
   };
   const label = type === 'robots' ? 'robots.txt' : type === 'json' ? 'JSON-LD' : 'HTML';
   return (
-    <div className="rounded-xl overflow-hidden border border-white/10">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-slate-900/80 border-b border-white/8">
-        <span className="text-[10px] font-mono text-slate-400">{label} — 복사 후 붙여넣기</span>
+    <div className="rounded-xl overflow-hidden border border-slate-300 bg-white shadow-sm">
+      <div className="flex items-center justify-between px-3 py-2 bg-slate-100 border-b border-slate-300">
+        <span className="text-[11px] font-mono font-semibold text-slate-700">{label} — 복사 후 붙여넣기</span>
         <button
           onClick={copy}
-          className="flex items-center gap-1 text-[10px] text-slate-400 hover:text-white transition-colors"
+          className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-md bg-white border border-slate-300 text-slate-700 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-800 transition-colors"
         >
           {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
           {copied ? '복사됨' : '복사'}
         </button>
       </div>
-      <pre className="p-3 text-[11px] text-slate-300 font-mono overflow-x-auto leading-relaxed whitespace-pre-wrap bg-slate-950/60">
+      <pre className="p-4 text-[12px] text-slate-900 font-mono overflow-x-auto leading-6 whitespace-pre-wrap bg-white selection:bg-blue-200">
         {code}
       </pre>
     </div>
@@ -135,9 +135,9 @@ const PRIORITY_CONFIG = {
 };
 
 const WEIGHT_COLORS: Record<string, string> = {
-  '높음': 'text-rose-400',
-  '중간': 'text-amber-400',
-  '낮음': 'text-slate-400',
+  '높음': 'text-slate-600',
+  '중간': 'text-slate-600',
+  '낮음': 'text-slate-600',
 };
 
 function CriteriaCard({ item, autoExpand }: { item: CriteriaItem; autoExpand?: boolean }) {
@@ -159,25 +159,22 @@ function CriteriaCard({ item, autoExpand }: { item: CriteriaItem; autoExpand?: b
     item.score >= 85 ? 'text-emerald-400' :
     item.score >= 70 ? 'text-amber-400' :
     'text-rose-400';
-  const barColor =
-    item.score >= 85 ? 'bg-emerald-500' :
-    item.score >= 70 ? 'bg-amber-500' :
-    'bg-rose-500';
+  const barColor = 'bg-blue-700';
 
   return (
-    <div ref={cardRef} className={`glass-card overflow-hidden ${autoExpand ? 'ring-1 ring-purple-500/40' : ''}`}>
+    <div ref={cardRef} className={`glass-card overflow-hidden ${autoExpand ? 'ring-2 ring-blue-500/25' : ''}`}>
       {/* Card header — click to expand */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full p-4 text-left flex items-start gap-3 hover:bg-white/3 transition-colors cursor-pointer"
+        className="w-full px-5 py-4 text-left flex items-start gap-3 hover:bg-slate-50 transition-colors cursor-pointer"
       >
         <div className="mt-0.5 shrink-0">{status.icon}</div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold text-white">{item.name}</div>
-              <div className="text-[11px] text-slate-400 mt-0.5 line-clamp-1">{item.currentState}</div>
+              <div className="text-[15px] font-bold text-slate-900">{item.name}</div>
+              <div className="text-[12px] text-slate-600 mt-1 line-clamp-1">현재 상태 · {item.currentState}</div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full ${status.cls}`}>
@@ -189,7 +186,7 @@ function CriteriaCard({ item, autoExpand }: { item: CriteriaItem; autoExpand?: b
 
           {/* Score bar + badges */}
           <div className="mt-2.5 flex items-center gap-2">
-            <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
+            <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
               <div
                 className={`h-full ${barColor} rounded-full transition-all duration-700`}
                 style={{ width: `${item.score}%` }}
@@ -198,40 +195,40 @@ function CriteriaCard({ item, autoExpand }: { item: CriteriaItem; autoExpand?: b
             <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${priority.cls}`}>
               {priority.label}
             </span>
-            <span className={`text-[10px] font-semibold ${weightColor}`}>가중치 {item.weight}</span>
+            <span className={`text-[10px] font-semibold ${weightColor}`}>영향도 {item.weight}</span>
           </div>
         </div>
       </button>
 
       {/* Expanded detail */}
       {expanded && (
-        <div className="px-4 pb-4 pt-1 space-y-3.5 border-t border-white/8 animate-fadeIn">
+        <div className="px-5 pb-5 pt-4 space-y-3 border-t border-slate-200 animate-fadeIn bg-white">
 
           {/* Score reasoning */}
-          <div className="p-3 rounded-xl bg-indigo-500/8 border border-indigo-500/15">
-            <div className="flex items-center gap-1.5 text-indigo-400 text-xs font-semibold mb-2">
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+            <div className="flex items-center gap-2 text-slate-800 text-xs font-bold mb-2">
               <Target className="w-3.5 h-3.5" />
-              점수 근거 — 왜 <span className={`font-mono font-black ${scoreColor}`}>{item.score}점</span>인가
+              1. 현재 상태와 점수 근거 <span className={`font-mono font-black ${scoreColor}`}>{item.score}점</span>
             </div>
-            <p className="text-xs text-slate-300 leading-relaxed">{item.scoringBasis}</p>
+            <p className="text-xs text-slate-700 leading-relaxed">{item.scoringBasis}</p>
           </div>
 
           {/* Official evaluation criteria */}
-          <div className="p-3 rounded-xl bg-purple-500/8 border border-purple-500/15">
-            <div className="flex items-center gap-1.5 text-purple-400 text-xs font-semibold mb-2">
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200">
+            <div className="flex items-center gap-2 text-slate-800 text-xs font-bold mb-2">
               <BookOpen className="w-3.5 h-3.5" />
-              공식 평가 기준
+              2. 판단 기준
             </div>
-            <p className="text-xs text-slate-300 leading-relaxed">{item.evaluationCriteria}</p>
+            <p className="text-xs text-slate-700 leading-relaxed">{item.evaluationCriteria}</p>
           </div>
 
           {/* Improvement suggestion */}
-          <div className="p-3 rounded-xl bg-amber-500/8 border border-amber-500/15">
-            <div className="flex items-center gap-1.5 text-amber-400 text-xs font-semibold mb-2">
+          <div className="p-4 rounded-xl bg-blue-50 border border-blue-200 border-l-4 border-l-blue-700 shadow-sm">
+            <div className="flex items-center gap-2 text-blue-950 text-sm font-bold mb-2">
               <Lightbulb className="w-3.5 h-3.5" />
-              구체적 개선 방안
+              3. 지금 해야 할 일
             </div>
-            <p className="text-xs text-slate-300 leading-relaxed">{item.improvement}</p>
+            <p className="text-[13px] text-slate-800 font-medium leading-6 whitespace-pre-line">{item.improvement}</p>
           </div>
 
           {/* Code snippet — 복붙 가능한 코드 */}
@@ -239,12 +236,12 @@ function CriteriaCard({ item, autoExpand }: { item: CriteriaItem; autoExpand?: b
             <CodeBlock code={item.codeSnippet} type={item.codeType} />
           )}
 
-          {/* Score gain */}
-          {item.estimatedScoreGain > 0 && (
-            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-500/8 border border-emerald-500/15">
-              <TrendingUp className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span className="text-xs text-emerald-300">
-                개선 완료 시 예상 점수 상승: <strong className="font-mono">+{item.estimatedScoreGain}점</strong>
+          {/* Impact level */}
+          {item.status !== 'pass' && (
+            <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-slate-900 border border-slate-900">
+              <TrendingUp className="w-4 h-4 text-white shrink-0" />
+              <span className="text-xs text-white">
+                개선 영향도: <strong>{item.priority === 'critical' || item.priority === 'high' ? '높음' : item.priority === 'medium' ? '중간' : '낮음'}</strong> · 실제 점수는 재검사 후 산정
               </span>
             </div>
           )}

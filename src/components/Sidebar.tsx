@@ -20,15 +20,9 @@ interface SidebarProps {
 }
 
 function ScoreBadge({ score }: { score: number }) {
-  const cls =
-    score >= 85
-      ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25'
-      : score >= 70
-      ? 'bg-amber-500/15 text-amber-300 border-amber-500/25'
-      : 'bg-rose-500/15 text-rose-300 border-rose-500/25';
   return (
-    <span className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full border ${cls}`}>
-      {score}
+    <span title={`종합 점수 ${score}점 / 100점`} aria-label={`종합 점수 ${score}점`} className="sidebar-score-badge text-[11px] font-mono font-extrabold px-2.5 py-1 rounded-full border whitespace-nowrap">
+      {score}점
     </span>
   );
 }
@@ -49,7 +43,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [adminOpen, setAdminOpen] = useState(false);
   return (
-    <aside className="w-full md:w-64 lg:w-72 shrink-0 border-b md:border-b-0 md:border-r border-white/10 bg-slate-950/60 backdrop-blur-2xl flex flex-col p-4 overflow-y-auto">
+    <aside className="v03-sidebar w-full md:w-64 lg:w-72 shrink-0 flex flex-col p-4 overflow-y-auto">
       {/* Brand */}
       <button
         onClick={onGoHome}
@@ -76,11 +70,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {history.length >= 2 && (
             <button
               onClick={onToggleCompareMode}
-              className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg border transition-all font-medium ${
-                compareMode
-                  ? 'bg-rose-500/15 border-rose-500/30 text-rose-400 hover:bg-rose-500/25'
-                  : 'bg-purple-500/10 border-purple-500/25 text-purple-400 hover:bg-purple-500/20'
-              }`}
+              className={`sidebar-compare-button flex items-center gap-1 text-[10px] px-2.5 py-1.5 rounded-lg border transition-all font-bold ${compareMode ? 'active' : ''}`}
             >
               <Swords className="w-3 h-3" />
               {compareMode ? '취소' : '비교 분석'}
@@ -90,8 +80,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* My company hint */}
         {myCompanyUrl && !compareMode && (
-          <div className="px-2 py-1.5 rounded-lg bg-amber-500/8 border border-amber-500/20 text-[10px] text-amber-400 flex items-center gap-1.5">
-            <Star className="w-3 h-3 fill-amber-400" />
+          <div className="sidebar-company-hint px-2.5 py-2 rounded-lg border text-[10px] font-bold flex items-center gap-1.5">
+            <Star className="w-3 h-3 fill-current" />
             <span className="truncate">우리 회사 설정됨</span>
           </div>
         )}
@@ -133,12 +123,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       onSelectAudit(audit);
                     }
                   }}
-                  className={`group flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-all ${
+                  className={`sidebar-history-card group flex items-center gap-2 p-3 rounded-xl border cursor-pointer transition-all ${
                     compareMode && isChecked
-                      ? 'bg-purple-950/50 border-purple-500/40'
+                      ? 'active'
                       : isSelected && !compareMode
-                      ? 'bg-purple-950/50 border-purple-500/40'
-                      : 'bg-white/4 border-white/8 hover:bg-white/8 hover:border-white/15'
+                      ? 'active'
+                      : ''
                   }`}
                 >
                   {/* Checkbox in compare mode */}
@@ -151,11 +141,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                   )}
 
+                  {!compareMode && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onSetMyCompany(isMyCompany ? null : audit.url); }}
+                      title={isMyCompany ? '우리 회사 해제' : '우리 회사로 설정'}
+                      aria-label={isMyCompany ? '우리 회사 해제' : '우리 회사로 설정'}
+                      className={`shrink-0 p-0.5 transition-all ${
+                        isMyCompany
+                          ? 'text-white opacity-100'
+                          : 'text-white/70 opacity-40 group-hover:opacity-100 hover:text-white'
+                      }`}
+                    >
+                      <Star className={`w-3.5 h-3.5 ${isMyCompany ? 'fill-white' : ''}`} />
+                    </button>
+                  )}
+
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1 min-w-0">
-                      {isMyCompany && (
-                        <Star className="w-3 h-3 fill-amber-400 text-amber-400 shrink-0" />
-                      )}
                       <span className="text-xs font-medium text-slate-200 truncate">{audit.title}</span>
                     </div>
                     <div className="text-[10px] text-slate-500 font-mono truncate mt-0.5">
@@ -163,34 +165,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1 shrink-0">
-                    <ScoreBadge score={audit.overallScore} />
+                  <div className="ml-auto flex items-center gap-1.5 shrink-0">
                     {!compareMode && (
-                      <>
-                        {/* Star button — always visible when starred, on hover otherwise */}
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onSetMyCompany(isMyCompany ? null : audit.url); }}
-                          title={isMyCompany ? '우리 회사 해제' : '우리 회사로 설정'}
-                          aria-label={isMyCompany ? '우리 회사 해제' : '우리 회사로 설정'}
-                          className={`p-0.5 transition-all ${
-                            isMyCompany
-                              ? 'text-amber-400 opacity-100'
-                              : 'opacity-0 group-hover:opacity-100 text-slate-600 hover:text-amber-400'
-                          }`}
-                        >
-                          <Star className={`w-3 h-3 ${isMyCompany ? 'fill-amber-400' : ''}`} />
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onRemoveHistory(audit.url); }}
-                          title="분석 이력 삭제"
-                          aria-label="분석 이력 삭제"
-                          className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-rose-400 transition-all p-0.5"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                        <ChevronRight className={`w-3 h-3 ${isSelected ? 'text-purple-400' : 'text-slate-700'}`} />
-                      </>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onRemoveHistory(audit.url); }}
+                        title="분석 이력 삭제"
+                        aria-label="분석 이력 삭제"
+                        className="opacity-0 group-hover:opacity-100 text-white/70 hover:text-white transition-all p-0.5"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
                     )}
+                    <ScoreBadge score={audit.overallScore} />
+                    {!compareMode && <ChevronRight className="w-3 h-3 text-white/80" />}
                   </div>
                 </div>
               );

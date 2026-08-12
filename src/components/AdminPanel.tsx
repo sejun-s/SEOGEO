@@ -85,7 +85,7 @@ export const AdminPanel: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
             </div>
             <div>
               <h3 className="text-base font-bold text-white">관리자 & 백엔드 모니터링 시스템</h3>
-              <p className="text-xs text-slate-400">Modular Monolith Architecture v3.0 telemetry</p>
+              <p className="text-xs text-slate-400">v0.6 scoring telemetry</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
