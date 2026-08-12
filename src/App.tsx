@@ -253,11 +253,24 @@ export function App() {
   const [myCompanyUrl, setMyCompanyUrl] = useState<string | null>(
     () => localStorage.getItem('seo-my-company-url')
   );
+  // v0.7: 경쟁사 태깅
+  const [competitorUrls, setCompetitorUrls] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('seo-competitor-urls') ?? '[]') as string[]; }
+    catch { return []; }
+  });
 
   const handleSetMyCompany = useCallback((url: string | null) => {
     setMyCompanyUrl(url);
     if (url) localStorage.setItem('seo-my-company-url', url);
     else localStorage.removeItem('seo-my-company-url');
+  }, []);
+
+  const handleToggleCompetitorUrl = useCallback((url: string) => {
+    setCompetitorUrls((prev) => {
+      const updated = prev.includes(url) ? prev.filter((u) => u !== url) : [...prev, url];
+      localStorage.setItem('seo-competitor-urls', JSON.stringify(updated));
+      return updated;
+    });
   }, []);
   const [analysisEvents, setAnalysisEvents] = useState<AnalysisEvent[]>([]);
   const [analysisSignals, setAnalysisSignals] = useState<PageSignals | null>(null);
@@ -303,15 +316,32 @@ export function App() {
       });
 
       const previousAudit = history.find((audit) => audit.url === result.url);
-      const enrichedResult: AuditResult = previousAudit?.siteCrawl && result.siteCrawl
+
+      // v0.7: 이전 스캔 점수를 기록해 카테고리별 델타를 보여줌
+      const previousCategoryScores = previousAudit
         ? {
-            ...result,
-            siteCrawl: {
-              ...result.siteCrawl,
-              comparison: compareSiteCrawls(previousAudit.siteCrawl, result.siteCrawl),
-            },
+            overallScore: previousAudit.overallScore,
+            technicalScore: previousAudit.technicalScore,
+            chatGptSearchScore: previousAudit.chatGptSearchScore,
+            academicGeoScore: previousAudit.academicGeoScore,
+            eeatScore: previousAudit.eeatScore,
+            schemaScore: previousAudit.schemaScore,
+            bingScore: previousAudit.bingScore,
           }
-        : result;
+        : undefined;
+
+      const enrichedResult: AuditResult = {
+        ...(previousAudit?.siteCrawl && result.siteCrawl
+          ? {
+              ...result,
+              siteCrawl: {
+                ...result.siteCrawl,
+                comparison: compareSiteCrawls(previousAudit.siteCrawl, result.siteCrawl),
+              },
+            }
+          : result),
+        ...(previousCategoryScores ? { previousCategoryScores } : {}),
+      };
 
       setHistory((prev) => {
         const filtered = prev.filter((a) => a.url !== enrichedResult.url);
@@ -389,6 +419,8 @@ export function App() {
         onStartCompare={handleStartCompare}
         myCompanyUrl={myCompanyUrl}
         onSetMyCompany={handleSetMyCompany}
+        competitorUrls={competitorUrls}
+        onToggleCompetitorUrl={handleToggleCompetitorUrl}
       />
 
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">

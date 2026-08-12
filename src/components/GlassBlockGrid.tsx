@@ -48,6 +48,8 @@ const BLOCKS: {
   },
 ];
 
+type PrevScores = NonNullable<AuditResult['previousCategoryScores']>;
+
 export const GlassBlockGrid: React.FC<GlassBlockGridProps> = ({ audit, onSelectDetailTab }) => {
   return (
     <div className="space-y-3">
@@ -61,6 +63,10 @@ export const GlassBlockGrid: React.FC<GlassBlockGridProps> = ({ audit, onSelectD
           const scoreColor = score >= 80 ? 'text-emerald-400' : score >= 60 ? 'text-amber-400' : 'text-rose-400';
           const categoryCriteria = audit.criteria?.filter((c) => c.category === block.id) ?? [];
           const topIssue = categoryCriteria.find((c) => c.status !== 'pass');
+
+          // 이전 스캔 대비 델타
+          const prevScore = audit.previousCategoryScores?.[block.scoreKey as keyof PrevScores];
+          const delta = prevScore !== undefined ? Math.round(score - prevScore) : null;
 
           return (
             <button
@@ -77,7 +83,18 @@ export const GlassBlockGrid: React.FC<GlassBlockGridProps> = ({ audit, onSelectD
                     <div className="text-[10px] text-slate-500">{block.subtitle}</div>
                   </div>
                 </div>
-                <span className={`text-xl font-black font-mono ${scoreColor} shrink-0`}>{score}</span>
+                {/* 점수 + 델타 뱃지 */}
+                <div className="flex items-end gap-1 shrink-0">
+                  <span className={`text-xl font-black font-mono ${scoreColor}`}>{score}</span>
+                  {delta !== null && delta !== 0 && (
+                    <span
+                      title={`이전 스캔 대비 ${delta > 0 ? '+' : ''}${delta}점`}
+                      className={`text-[10px] font-bold mb-0.5 leading-none ${delta > 0 ? 'text-emerald-400' : 'text-rose-400'}`}
+                    >
+                      {delta > 0 ? `+${delta}` : `${delta}`}
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* 점수 바 */}

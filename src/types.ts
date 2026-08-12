@@ -115,6 +115,17 @@ export interface AuditResult {
   naverScore?: number;
   lastScanned: string;
 
+  // v0.7: 이전 스캔 카테고리 점수 (재스캔 시 델타 표시용)
+  previousCategoryScores?: {
+    overallScore?: number;
+    technicalScore?: number;
+    chatGptSearchScore?: number;
+    academicGeoScore?: number;
+    eeatScore?: number;
+    schemaScore?: number;
+    bingScore?: number;
+  };
+
   // Block 4 & v3: 점수 모델 필드
   scoreModelVersion?: string       // 예: "v0.6-r1"
   legacyScore?: number             // overallScore의 legacy 복사본
