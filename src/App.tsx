@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import type { AuditResult, DetailTabType } from './types';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
@@ -11,7 +11,7 @@ import { FixChecklist } from './components/FixChecklist';
 import { analyzeUrl } from './lib/analyzeUrl';
 import { compareSiteCrawls } from './lib/siteCrawlComparison';
 import type { AnalysisEvent, PageSignals } from './types';
-import { Search, Sparkles, Zap, Loader2, ExternalLink, Tag, X, Plus, Globe, BarChart3, Lightbulb } from 'lucide-react';
+import { Search, Sparkles, Zap, Loader2, ExternalLink, Tag, X, Plus, Globe, BarChart3, Lightbulb, ShoppingBag } from 'lucide-react';
 import { KeywordOptimizer } from './components/KeywordOptimizer';
 import { AnalyticsCard } from './components/AnalyticsCard';
 import { GA4AccountCard } from './components/GA4AccountCard';
@@ -245,7 +245,7 @@ export function App() {
   const [scanError, setScanError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'overview' | 'detail'>('overview');
   const [activeDetailTab, setActiveDetailTab] = useState<DetailTabType>('technical');
-  const [mainTab, setMainTab] = useState<'seo' | 'ga4' | 'insights'>('seo');
+  const [mainTab, setMainTab] = useState<'seo' | 'ga4' | 'insights' | 'shopify'>('seo');
   const [ga4Tab, setGa4Tab] = useState<'list' | 'account'>('list');
   const [highlightCriteriaId, setHighlightCriteriaId] = useState<string | null>(null);
   const [compareMode, setCompareMode] = useState(false);
@@ -469,24 +469,29 @@ export function App() {
               <div className="v03-main-tabs sticky top-0 z-10">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex gap-0">
                   {([
-                    { id: 'seo', label: 'URL 분석', icon: Globe, beta: false },
-                    { id: 'ga4', label: 'GA4 분석', icon: BarChart3, beta: false },
-                    { id: 'insights', label: 'AI 인사이트', icon: Lightbulb, beta: false },
-                  ] as const).map(({ id, label, icon: Icon, beta }) => (
+                    { id: 'seo', label: 'URL 분석', icon: Globe },
+                    { id: 'ga4', label: 'GA4 분석', icon: BarChart3 },
+                    { id: 'insights', label: 'AI 인사이트', icon: Lightbulb },
+                    ...(selectedAudit.pageSignals?.shopify
+                      ? [{ id: 'shopify', label: 'Shopify AI', icon: ShoppingBag }]
+                      : []),
+                  ] as { id: 'seo' | 'ga4' | 'insights' | 'shopify'; label: string; icon: React.ComponentType<{ className?: string }> }[]).map(({ id, label, icon: Icon }) => (
                     <button
                       key={id}
                       onClick={() => setMainTab(id)}
                       className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-all duration-150 ${
                         mainTab === id
-                          ? 'border-purple-500 text-white'
+                          ? id === 'shopify'
+                            ? 'border-emerald-500 text-emerald-300'
+                            : 'border-purple-500 text-white'
                           : 'border-transparent text-slate-500 hover:text-slate-300 hover:border-white/20'
                       }`}
                     >
                       <Icon className="w-3.5 h-3.5" />
                       {label}
-                      {beta && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-400 font-semibold leading-none">
-                          BETA
+                      {id === 'shopify' && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-semibold leading-none">
+                          NEW
                         </span>
                       )}
                       {id === 'ga4' && selectedAudit.pageSignals && !selectedAudit.pageSignals.hasGA4 && (
@@ -543,13 +548,16 @@ export function App() {
                   <InsightPanel audit={selectedAudit} />
                 )}
 
+                {/* Shopify AI 탭 */}
+                {!showCompare && mainTab === 'shopify' && selectedAudit.pageSignals?.shopify && (
+                  <div className="animate-fadeIn">
+                    <ShopifyPanel audit={selectedAudit} />
+                  </div>
+                )}
+
                 {/* URL 분석 탭 */}
                 {!showCompare && mainTab === 'seo' && (<>
                 <ReportActions audit={selectedAudit} />
-                {/* Shopify 스토어 감지 시 AI 노출 체크리스트 */}
-                {selectedAudit.pageSignals?.shopify && (
-                  <ShopifyPanel audit={selectedAudit} />
-                )}
                 <ScoreOverview audit={selectedAudit} />
                 <SiteCrawlPanel audit={selectedAudit} />
 

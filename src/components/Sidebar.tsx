@@ -150,8 +150,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex items-center gap-1 min-w-0">
             <span className="text-xs font-medium text-slate-200 truncate">{audit.title}</span>
           </div>
-          <div className="text-[10px] text-slate-500 font-mono truncate mt-0.5">
-            {audit.url.replace(/^https?:\/\//, '')}
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className="text-[10px] text-slate-500 font-mono truncate">
+              {audit.url.replace(/^https?:\/\//, '')}
+            </span>
+            {audit.pageSignals?.shopify && (
+              <span
+                title="Shopify 스토어 감지"
+                className="shrink-0 text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 font-bold leading-none"
+              >
+                Shopify
+              </span>
+            )}
           </div>
         </div>
 
