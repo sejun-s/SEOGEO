@@ -189,36 +189,75 @@ export async function fetchPageSignals(targetUrl: string, emit?: EmitFn): Promis
   if (isShopify) {
     emit?.({ type: 'step', msg: '🛍️ Shopify 스토어 감지 — AI 가시성 체크리스트 분석 중...', level: 'info', ts: now() })
 
-    // JSON-LD 타입 목록
-    const ldTypes = jsonLdRaw.flatMap((raw) => {
-      try {
-        const obj = JSON.parse(raw) as Record<string, unknown>
-        const collect = (o: Record<string, unknown>): string[] => {
-          const types: string[] = []
-          if (typeof o['@type'] === 'string') types.push(o['@type'])
-          if (Array.isArray(o['@type'])) types.push(...(o['@type'] as string[]))
-          for (const v of Object.values(o)) {
-            if (v && typeof v === 'object' && !Array.isArray(v)) {
-              types.push(...collect(v as Record<string, unknown>))
-            }
-          }
-          return types
-        }
-        return collect(obj)
-      } catch { return [] }
-    })
+    // ── 상품 페이지 샘플링 ────────────────────────────────────────────────────
+    // Product/Offer/AggregateRating 스키마는 홈페이지가 아닌 상품 페이지에 있음
+    // 홈페이지에서 /products/xxx 링크를 찾아 한 페이지를 추가로 fetch
+    let productPageHtml = ''
+    let productPageChecked: string | undefined
+    let schemaCheckedOnHomepage = true
 
-    const hasProductSchema     = ldTypes.some(t => /^product$/i.test(t))
-    const hasOfferSchema       = ldTypes.some(t => /^offer(s)?$/i.test(t))
-    const hasAggregateRating   = ldTypes.some(t => /^aggregaterating$/i.test(t))
-    const hasFaqSchema         = ldTypes.some(t => /^faqpage$/i.test(t))
-    const hasBreadcrumbSchema  = ldTypes.some(t => /^breadcrumblist$/i.test(t))
+    const productHrefMatch = html.match(/href=["']([^"']*\/products\/[A-Za-z0-9_%-][^"'?#]*)["']/i)
+    if (productHrefMatch) {
+      const rawHref = productHrefMatch[1]
+      const productUrl = rawHref.startsWith('http')
+        ? rawHref
+        : `${base.origin}${rawHref.startsWith('/') ? '' : '/'}${rawHref}`
+      try {
+        emit?.({ type: 'step', msg: `🔬 상품 페이지 스키마 확인 중: ${rawHref.split('/products/')[1]?.slice(0, 40) ?? ''}`, level: 'info', ts: now() })
+        const productRes = await fetch(productUrl, { headers: HEADERS, signal: AbortSignal.timeout(8000) })
+        if (productRes.ok) {
+          productPageHtml = (await productRes.text()).slice(0, 200_000)
+          productPageChecked = productUrl
+          schemaCheckedOnHomepage = false
+        }
+      } catch {
+        // 상품 페이지 접근 실패 → 홈페이지 HTML로 fallback
+      }
+    }
+
+    // 스키마 확인 대상: 상품 페이지 우선, 없으면 홈페이지
+    const schemaHtml = productPageHtml || html
+
+    // ── JSON-LD 타입 파싱 ─────────────────────────────────────────────────────
+    const extractLdRaw = (src: string): string[] => {
+      const results: string[] = []
+      const re = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi
+      let m: RegExpExecArray | null
+      while ((m = re.exec(src)) !== null) results.push(m[1].trim().slice(0, 3000))
+      return results
+    }
+
+    const parseLdTypes = (raws: string[]): string[] =>
+      raws.flatMap((raw) => {
+        try {
+          const obj = JSON.parse(raw) as Record<string, unknown>
+          const collect = (o: Record<string, unknown>): string[] => {
+            const types: string[] = []
+            if (typeof o['@type'] === 'string') types.push(o['@type'])
+            if (Array.isArray(o['@type'])) types.push(...(o['@type'] as string[]))
+            for (const v of Object.values(o)) {
+              if (v && typeof v === 'object' && !Array.isArray(v))
+                types.push(...collect(v as Record<string, unknown>))
+            }
+            return types
+          }
+          return collect(obj)
+        } catch { return [] }
+      })
+
+    const ldTypes = parseLdTypes(extractLdRaw(schemaHtml))
+
+    const hasProductSchema      = ldTypes.some(t => /^product$/i.test(t))
+    const hasOfferSchema        = ldTypes.some(t => /^offer(s)?$/i.test(t))
+    const hasAggregateRating    = ldTypes.some(t => /^aggregaterating$/i.test(t))
+    const hasFaqSchema          = ldTypes.some(t => /^faqpage$/i.test(t))
+    const hasBreadcrumbSchema   = ldTypes.some(t => /^breadcrumblist$/i.test(t))
     const hasOrganizationSchema = ldTypes.some(t => /^(organization|brand|store)$/i.test(t))
 
-    // 콘텐츠·브랜드 신호
+    // 콘텐츠·브랜드 신호 (홈페이지 네비 기준)
     const hasBlogSection  = /href=["'][^"']*\/blogs\//i.test(html)
-    const hasAboutPage    = /href=["'][^"']*\/pages\/(?:about|brand|who-we-are|our-story)/i.test(html)
-    const hasContactPage  = /href=["'][^"']*\/pages\/contact/i.test(html)
+    const hasAboutPage    = /href=["'][^"']*\/pages\/(?:about|brand|who-we-are|our-story|about-us|about-brand|story|team|company)/i.test(html)
+    const hasContactPage  = /href=["'][^"']*\/pages\/(?:contact|contact-us|support|help)/i.test(html)
 
     // 리뷰 앱 감지
     const reviewAppDetected = /judgeme|judge\.me/i.test(html)
@@ -304,6 +343,8 @@ export async function fetchPageSignals(targetUrl: string, emit?: EmitFn): Promis
       hasContactPage,
       reviewAppDetected,
       hasIndexNow,
+      productPageChecked,
+      schemaCheckedOnHomepage,
       shopifyAiScore,
       scoreBreakdown: breakdown,
     }

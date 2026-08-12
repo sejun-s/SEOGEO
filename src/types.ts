@@ -220,6 +220,11 @@ export interface ShopifySignals {
   hasIndexNow: boolean;              // IndexNow key 메타 태그
   shopifyVersion?: string;           // CDN 감지 버전
 
+  // ── 스키마 체크 출처 ─────────────────────────────────────────────────────────
+  // Product/Offer/AggregateRating은 상품 페이지에서 확인해야 정확함
+  productPageChecked?: string;       // 실제로 스키마를 확인한 상품 페이지 URL
+  schemaCheckedOnHomepage: boolean;  // true = 홈페이지만 확인 (정확도 낮음)
+
   // ── 종합 점수 (0-100) ───────────────────────────────────────────────────────
   shopifyAiScore: number;
   scoreBreakdown: { label: string; earned: number; max: number; pass: boolean }[];

@@ -28,14 +28,14 @@ function botLabel(status: ShopifySignals['oaiSearchBotStatus']): { text: string;
 
 interface SectionProps {
   icon: React.ReactNode
-  title: string
+  title: React.ReactNode
   children: React.ReactNode
 }
 
 function Section({ icon, title, children }: SectionProps) {
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <span className="text-slate-500">{icon}</span>
         <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{title}</span>
       </div>
@@ -215,14 +215,35 @@ export function ShopifyPanel({ audit }: ShopifyPanelProps) {
       </Section>
 
       {/* ─ 상품 스키마 ─ */}
-      <Section icon={<ShoppingBag className="w-3.5 h-3.5" />} title="상품 Schema.org 마크업">
+      <Section
+        icon={<ShoppingBag className="w-3.5 h-3.5" />}
+        title={
+          <span className="flex items-center gap-1.5 flex-wrap">
+            <span>상품 Schema.org 마크업</span>
+            {s.productPageChecked ? (
+              <span
+                title={s.productPageChecked}
+                className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 font-bold normal-case tracking-normal"
+              >
+                ✓ 상품 페이지 기준
+              </span>
+            ) : (
+              <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-amber-500/12 border border-amber-500/25 text-amber-400 font-bold normal-case tracking-normal">
+                ⚠ 홈페이지 기준 — 상품 URL로 재분석 권장
+              </span>
+            )}
+          </span>
+        }
+      >
         <CheckRow
           status={s.hasProductSchema ? 'pass' : 'fail'}
           label="Product JSON-LD 스키마"
           statusText={s.hasProductSchema ? '있음' : '없음'}
-          detail="AI가 상품명·설명·카테고리를 구조화 데이터로 읽습니다. 홈페이지가 아닌 상품 페이지에 있어야 합니다."
+          detail={`AI가 상품명·설명·카테고리를 구조화 데이터로 읽습니다.${s.productPageChecked ? ` (${s.productPageChecked.split('/products/')[1]?.slice(0, 40) ?? '상품 페이지'} 기준으로 확인)` : ' 홈페이지가 아닌 상품 페이지에 있어야 합니다.'}`}
           tip={!s.hasProductSchema
-            ? 'Shopify 테마 product.liquid에 @type:Product JSON-LD를 추가하거나 Schema App을 설치하세요.'
+            ? s.schemaCheckedOnHomepage
+              ? '상품 페이지 URL(/products/xxx)로 직접 분석하면 더 정확한 결과를 얻을 수 있습니다. 스키마가 없다면 Shopify 테마 product.liquid에 @type:Product JSON-LD를 추가하거나 Schema App을 설치하세요.'
+              : 'Shopify 테마 product.liquid에 @type:Product JSON-LD를 추가하거나 Schema App을 설치하세요.'
             : undefined}
         />
         <CheckRow
