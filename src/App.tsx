@@ -21,6 +21,7 @@ import { AnalysisProgress } from './components/AnalysisProgress';
 import { MobileNav } from './components/MobileNav';
 import { ReportActions } from './components/ReportActions';
 import { ShopifyPanel } from './components/ShopifyPanel';
+import { NaverReadinessPanel } from './components/NaverReadinessPanel';
 
 const HISTORY_KEY = 'seo-analyzer-history';
 
@@ -245,7 +246,9 @@ export function App() {
   const [scanError, setScanError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'overview' | 'detail'>('overview');
   const [activeDetailTab, setActiveDetailTab] = useState<DetailTabType>('technical');
+  const [topTab, setTopTab] = useState<'seo-geo' | 'geo-monitoring'>('seo-geo');
   const [mainTab, setMainTab] = useState<'seo' | 'ga4' | 'insights' | 'shopify'>('seo');
+  const [urlSubTab, setUrlSubTab] = useState<'technical' | 'ai-citation' | 'naver'>('technical');
   const [ga4Tab, setGa4Tab] = useState<'list' | 'account'>('list');
   const [highlightCriteriaId, setHighlightCriteriaId] = useState<string | null>(null);
   const [compareMode, setCompareMode] = useState(false);
@@ -302,7 +305,9 @@ export function App() {
     setAnalysisEvents([]);
     setAnalysisSignals(null);
     setShowLog(false);
+    setTopTab('seo-geo');
     setMainTab('seo');
+    setUrlSubTab('technical');
     setGa4Tab('list');
     setHighlightCriteriaId(null);
     setShowCompare(false);
@@ -425,10 +430,13 @@ export function App() {
       />
 
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
-        {/* Header only shows when results are displayed */}
-        {showResults && (
-          <Header onScanUrl={handleScanUrl} isScanning={isScanning} />
-        )}
+        {/* 헤더: 항상 표시 — 최상단 탭 + URL 분석하기 입력 포함 */}
+        <Header
+          onScanUrl={handleScanUrl}
+          isScanning={isScanning}
+          topTab={topTab}
+          onTopTabChange={(tab) => { setTopTab(tab); }}
+        />
 
         <main className="flex-1 overflow-y-auto flex flex-col">
           {/* Scanning overlay */}
@@ -465,42 +473,68 @@ export function App() {
                 </div>
               )}
 
-              {/* 탭 바 */}
-              <div className="v03-main-tabs sticky top-0 z-10">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex gap-0">
-                  {([
-                    { id: 'seo', label: 'URL 분석', icon: Globe },
-                    { id: 'ga4', label: 'GA4 분석', icon: BarChart3 },
-                    { id: 'insights', label: 'AI 인사이트', icon: Lightbulb },
-                    ...(selectedAudit.pageSignals?.shopify
-                      ? [{ id: 'shopify', label: 'Shopify AI', icon: ShoppingBag }]
-                      : []),
-                  ] as { id: 'seo' | 'ga4' | 'insights' | 'shopify'; label: string; icon: React.ComponentType<{ className?: string }> }[]).map(({ id, label, icon: Icon }) => (
-                    <button
-                      key={id}
-                      onClick={() => setMainTab(id)}
-                      className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-all duration-150 ${
-                        mainTab === id
-                          ? id === 'shopify'
-                            ? 'border-emerald-500 text-emerald-300'
-                            : 'border-purple-500 text-white'
-                          : 'border-transparent text-slate-500 hover:text-slate-300 hover:border-white/20'
-                      }`}
-                    >
-                      <Icon className="w-3.5 h-3.5" />
-                      {label}
-                      {id === 'shopify' && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 font-semibold leading-none">
-                          NEW
-                        </span>
-                      )}
-                      {id === 'ga4' && selectedAudit.pageSignals && !selectedAudit.pageSignals.hasGA4 && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
-                      )}
-                    </button>
-                  ))}
+              {/* ── 메인 탭 + URL 서브탭 (SEO·GEO 분석 선택 시) ── */}
+              {topTab === 'seo-geo' && showResults && (
+                <div className="v03-main-tabs sticky top-0 z-10">
+                  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    {/* 메인 탭 */}
+                    <div className="flex gap-0">
+                      {([
+                        { id: 'seo',      label: 'URL 분석',    icon: Globe },
+                        { id: 'ga4',      label: 'GA4 분석',    icon: BarChart3 },
+                        { id: 'insights', label: 'AI 인사이트', icon: Lightbulb },
+                        ...(selectedAudit.pageSignals?.shopify
+                          ? [{ id: 'shopify', label: 'Shopify AI', icon: ShoppingBag }]
+                          : []),
+                      ] as { id: 'seo' | 'ga4' | 'insights' | 'shopify'; label: string; icon: React.ComponentType<{ className?: string }> }[]).map(({ id, label, icon: Icon }) => (
+                        <button
+                          key={id}
+                          onClick={() => { setMainTab(id); if (id !== 'seo') setViewMode('overview'); }}
+                          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-all duration-150 ${
+                            mainTab === id
+                              ? id === 'shopify'
+                                ? 'border-[#059669] text-[#065f46]'
+                                : 'border-[#4f6df5] text-[#1b2559]'
+                              : 'border-transparent text-[#737c9c] hover:text-[#1b2559] hover:border-[#dce6e9]'
+                          }`}
+                        >
+                          <Icon className="w-3 h-3" />
+                          {label}
+                          {id === 'shopify' && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-700 font-semibold leading-none">NEW</span>
+                          )}
+                          {id === 'ga4' && selectedAudit.pageSignals && !selectedAudit.pageSignals.hasGA4 && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* URL 서브탭 (URL 분석 선택 시) */}
+                    {mainTab === 'seo' && !showCompare && (
+                      <div className="flex gap-1 pb-2 pt-1">
+                        {([
+                          { id: 'technical',   label: 'SEO 기술 준비도' },
+                          { id: 'ai-citation', label: 'AI 인용 준비도' },
+                          { id: 'naver',       label: '네이버 검색 준비도' },
+                        ] as { id: 'technical' | 'ai-citation' | 'naver'; label: string }[]).map(({ id, label }) => (
+                          <button
+                            key={id}
+                            onClick={() => { setUrlSubTab(id); setViewMode('overview'); }}
+                            className={`px-3 py-1 text-[11px] font-semibold rounded-lg border transition-all ${
+                              urlSubTab === id
+                                ? 'bg-[#eef3ff] border-[#4f6df5] text-[#1b2559]'
+                                : 'border-transparent text-[#737c9c] hover:text-[#1b2559] hover:border-[#dce6e9]'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="v03-content max-w-7xl mx-auto w-full px-4 py-6 sm:px-6 lg:px-8 space-y-6">
 
@@ -555,47 +589,35 @@ export function App() {
                   </div>
                 )}
 
-                {/* URL 분석 탭 */}
-                {!showCompare && mainTab === 'seo' && (<>
-                <ReportActions audit={selectedAudit} />
-                <ScoreOverview audit={selectedAudit} />
-                <SiteCrawlPanel audit={selectedAudit} />
-
-                <KeywordOptimizer
-                  audit={selectedAudit}
-                  keywords={keywords}
-                  onAddKeyword={handleAddKeyword}
-                  onRemoveKeyword={handleRemoveKeyword}
-                />
-
-                <div id="action-hub" className="scroll-mt-24">
-                  <FixChecklist
-                    audit={selectedAudit}
-                    onReanalyze={handleScanUrl}
-                    isScanning={isScanning}
-                  />
-                </div>
-
-                {/* 분석 로그 */}
-                {showLog && (analysisEvents.length > 0 || analysisSignals) && (
-                  <div className="animate-fadeIn">
-                    <div className="flex items-center justify-between mb-2 px-1">
-                      <span className="text-xs text-slate-500 font-semibold">AI 분석 과정</span>
-                      <button
-                        onClick={() => setShowLog(false)}
-                        className="text-[11px] text-slate-600 hover:text-slate-400 transition-colors"
-                      >
-                        접기 ✕
-                      </button>
+                {/* GEO 모니터링 탭 */}
+                {topTab === 'geo-monitoring' && (
+                  <div className="glass-card p-10 text-center space-y-4 animate-fadeIn">
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/20 flex items-center justify-center mx-auto">
+                      <BarChart3 className="w-7 h-7 text-indigo-400" />
                     </div>
-                    <AnalysisLog
-                      events={analysisEvents}
-                      signals={analysisSignals}
-                      isScanning={isScanning}
-                    />
+                    <div>
+                      <h3 className="text-base font-bold text-white mb-1">GEO 모니터링</h3>
+                      <p className="text-sm text-slate-500 max-w-md mx-auto leading-relaxed">
+                        브랜드가 ChatGPT · Perplexity · Google AI Overviews에서 얼마나 자주 언급되는지
+                        주기적으로 추적하는 기능입니다.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2 justify-center pt-2">
+                      {['브랜드 언급 추이', 'AI 인용 URL 분석', '경쟁사 비교', '주간 리포트'].map(f => (
+                        <span key={f} className="text-[11px] px-3 py-1.5 rounded-full border border-white/10 bg-white/5 text-slate-500">{f}</span>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-slate-700 pt-2">준비 중 — 곧 출시됩니다</p>
                   </div>
                 )}
 
+                {/* URL 분석 탭 (SEO·GEO 분석 선택 시) */}
+                {topTab === 'seo-geo' && !showCompare && mainTab === 'seo' && (<>
+                {/* 항상 보이는 영역: 보고서 액션 + 종합 점수 개요 */}
+                <ReportActions audit={selectedAudit} />
+                <ScoreOverview audit={selectedAudit} />
+
+                {/* DetailPage는 서브탭 무관하게 오버레이 */}
                 {viewMode === 'detail' ? (
                   <DetailPage
                     audit={selectedAudit}
@@ -604,17 +626,70 @@ export function App() {
                     onBackToOverview={handleBackToOverview}
                     autoExpandId={highlightCriteriaId ?? undefined}
                   />
-                ) : (
-                  <div className="space-y-6 animate-fadeInUp">
-                    <div>
-                      <div className="flex items-center gap-2 mb-3 px-1">
-                        <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider">상세 분석</span>
-                      </div>
-                      <GlassBlockGrid audit={selectedAudit} onSelectDetailTab={handleSelectBlockTab} />
-                    </div>
+                ) : (<>
 
-                  </div>
-                )}
+                  {/* ── 서브탭 1: SEO 기술 준비도 ── */}
+                  {urlSubTab === 'technical' && (
+                    <div className="space-y-6 animate-fadeInUp">
+                      <GlassBlockGrid
+                        audit={selectedAudit}
+                        onSelectDetailTab={handleSelectBlockTab}
+                        filterIds={['technical', 'schema', 'cms']}
+                      />
+                      <SiteCrawlPanel audit={selectedAudit} />
+                      <KeywordOptimizer
+                        audit={selectedAudit}
+                        keywords={keywords}
+                        onAddKeyword={handleAddKeyword}
+                        onRemoveKeyword={handleRemoveKeyword}
+                      />
+                      <div id="action-hub" className="scroll-mt-24">
+                        <FixChecklist
+                          audit={selectedAudit}
+                          onReanalyze={handleScanUrl}
+                          isScanning={isScanning}
+                        />
+                      </div>
+                      {showLog && (analysisEvents.length > 0 || analysisSignals) && (
+                        <div className="animate-fadeIn">
+                          <div className="flex items-center justify-between mb-2 px-1">
+                            <span className="text-xs text-slate-500 font-semibold">AI 분석 과정</span>
+                            <button onClick={() => setShowLog(false)} className="text-[11px] text-slate-600 hover:text-slate-400">접기 ✕</button>
+                          </div>
+                          <AnalysisLog events={analysisEvents} signals={analysisSignals} isScanning={isScanning} />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ── 서브탭 2: AI 인용 준비도 ── */}
+                  {urlSubTab === 'ai-citation' && (
+                    <div className="space-y-6 animate-fadeInUp">
+                      <GlassBlockGrid
+                        audit={selectedAudit}
+                        onSelectDetailTab={handleSelectBlockTab}
+                        filterIds={['chatgpt', 'geo', 'eeat']}
+                      />
+                      {/* AI 인용 관련 개선 항목 */}
+                      <div id="action-hub" className="scroll-mt-24">
+                        <FixChecklist
+                          audit={selectedAudit}
+                          onReanalyze={handleScanUrl}
+                          isScanning={isScanning}
+                          filterCategories={['chatgpt', 'geo', 'eeat']}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── 서브탭 3: 네이버 검색 준비도 ── */}
+                  {urlSubTab === 'naver' && (
+                    <div className="space-y-4 animate-fadeInUp">
+                      <NaverReadinessPanel audit={selectedAudit} />
+                    </div>
+                  )}
+
+                </>)}
                 </>)}
               </div>
 

@@ -5,6 +5,8 @@ import { ArrowRight } from 'lucide-react';
 interface GlassBlockGridProps {
   audit: AuditResult;
   onSelectDetailTab: (tab: DetailTabType) => void;
+  /** 표시할 카테고리 ID 목록. 생략 시 전체 표시 */
+  filterIds?: DetailTabType[];
 }
 
 const BLOCKS: {
@@ -50,15 +52,12 @@ const BLOCKS: {
 
 type PrevScores = NonNullable<AuditResult['previousCategoryScores']>;
 
-export const GlassBlockGrid: React.FC<GlassBlockGridProps> = ({ audit, onSelectDetailTab }) => {
+export const GlassBlockGrid: React.FC<GlassBlockGridProps> = ({ audit, onSelectDetailTab, filterIds }) => {
+  const visibleBlocks = filterIds ? BLOCKS.filter(b => filterIds.includes(b.id)) : BLOCKS;
   return (
     <div className="space-y-3">
-      <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-1">
-        카테고리별 상세 분석
-      </h3>
-
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {BLOCKS.map((block) => {
+        {visibleBlocks.map((block) => {
           const score = audit[block.scoreKey] as number;
           const scoreColor = score >= 80 ? 'text-emerald-400' : score >= 60 ? 'text-amber-400' : 'text-rose-400';
           const categoryCriteria = audit.criteria?.filter((c) => c.category === block.id) ?? [];
@@ -124,3 +123,4 @@ export const GlassBlockGrid: React.FC<GlassBlockGridProps> = ({ audit, onSelectD
     </div>
   );
 };
+
