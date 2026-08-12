@@ -5,6 +5,10 @@
   --bg-dark: #060b17;
 }
 
+html {
+  font-size: 17px;
+}
+
 body {
   background-color: #060b17;
   background-image:
@@ -407,6 +411,37 @@ body { background: #e8edf7; color: var(--v03-ink); letter-spacing: -.012em; }
 .v03-content .v03-status-pill { color:inherit; }
 .v03-content input, .v03-content textarea { color:#1b2559 !important; }
 .v03-content input::placeholder, .v03-content textarea::placeholder { color:#9aa3b6 !important; }
+
+/* v0.6 readability pass — keep secondary text compact without making it tiny */
+.v03-shell .text-xs { font-size: 0.8125rem; line-height: 1.35rem; }
+.v03-shell .text-sm { font-size: 0.9375rem; line-height: 1.5rem; }
+.v03-sidebar .text-xs { font-size: 0.8125rem; }
+.v03-sidebar .text-sm { font-size: 0.9375rem; }
+
+.v03-eyebrow { font-size: 12px; }
+.v03-scan-date { font-size: 13px; }
+.v03-score-label { font-size: 14px; }
+.v03-score-number small { font-size: 14px; }
+.v03-status-pill { font-size: 12px; }
+.v03-primary-score p, .v03-radar-card p { font-size: 13px; }
+.v03-card-title { font-size: 15px; }
+.v03-radar text { font-size: 10px; }
+.v03-action-copy span { font-size: 12px; }
+.v03-action-copy strong { font-size: 16px; }
+.v03-action-copy p { font-size: 13px; line-height: 1.55; }
+.v03-action-banner button { font-size: 13px; }
+.v03-category-row span { font-size: 13px; }
+.v03-category-row small { font-size: 11px; }
+.v03-disclaimer { font-size: 12px; }
+.v03-progress-modal > p { font-size: 14px; }
+.v03-progress-steps b, .v03-progress-steps small { font-size: 12px; }
+
+.v04-report-bar > div:first-child > span { font-size: 15px; }
+.v04-report-bar p { font-size: 12px; line-height: 1.5; }
+.v04-report-actions button { font-size: 13px; }
+.v04-report-window > header > div:first-child strong { font-size: 15px; }
+.v04-report-window > header > div:first-child span { font-size: 12px; }
+.v04-report-window > header button { font-size: 12px; }
 
 *:focus-visible { outline: 2px solid var(--v03-teal); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; } }
