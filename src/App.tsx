@@ -20,6 +20,7 @@ import { CompareView } from './components/CompareView';
 import { AnalysisProgress } from './components/AnalysisProgress';
 import { MobileNav } from './components/MobileNav';
 import { ReportActions } from './components/ReportActions';
+import { ShopifyPanel } from './components/ShopifyPanel';
 
 const HISTORY_KEY = 'seo-analyzer-history';
 
@@ -545,6 +546,10 @@ export function App() {
                 {/* URL 분석 탭 */}
                 {!showCompare && mainTab === 'seo' && (<>
                 <ReportActions audit={selectedAudit} />
+                {/* Shopify 스토어 감지 시 AI 노출 체크리스트 */}
+                {selectedAudit.pageSignals?.shopify && (
+                  <ShopifyPanel audit={selectedAudit} />
+                )}
                 <ScoreOverview audit={selectedAudit} />
                 <SiteCrawlPanel audit={selectedAudit} />
 

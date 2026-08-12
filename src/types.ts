@@ -194,6 +194,37 @@ export interface PresetSite {
 
 export type DetailTabType = 'technical' | 'chatgpt' | 'geo' | 'schema' | 'eeat' | 'cms';
 
+// ─── Shopify AI 가시성 신호 ─────────────────────────────────────────────────
+export interface ShopifySignals {
+  isShopify: true;
+
+  // ── AI 크롤러 접근 ──────────────────────────────────────────────────────────
+  oaiSearchBotStatus: 'explicitly_allowed' | 'allowed_by_general_rule' | 'explicitly_blocked' | 'unknown';
+  gptBotStatus:       'explicitly_allowed' | 'allowed_by_general_rule' | 'explicitly_blocked' | 'unknown';
+
+  // ── 상품 스키마 ─────────────────────────────────────────────────────────────
+  hasProductSchema: boolean;         // @type: "Product" JSON-LD
+  hasOfferSchema: boolean;           // Offer with price
+  hasAggregateRating: boolean;       // AggregateRating (리뷰 점수)
+  hasFaqSchema: boolean;             // FAQPage
+  hasBreadcrumbSchema: boolean;      // BreadcrumbList
+  hasOrganizationSchema: boolean;    // Organization / Brand
+
+  // ── 콘텐츠 & 브랜드 신호 ────────────────────────────────────────────────────
+  hasBlogSection: boolean;           // /blogs/ 경로 링크 감지
+  hasAboutPage: boolean;             // /pages/about 또는 유사 경로
+  hasContactPage: boolean;           // /pages/contact
+  reviewAppDetected?: string;        // 감지된 리뷰 앱 이름 (Judge.me 등)
+
+  // ── 기술 신호 ────────────────────────────────────────────────────────────────
+  hasIndexNow: boolean;              // IndexNow key 메타 태그
+  shopifyVersion?: string;           // CDN 감지 버전
+
+  // ── 종합 점수 (0-100) ───────────────────────────────────────────────────────
+  shopifyAiScore: number;
+  scoreBreakdown: { label: string; earned: number; max: number; pass: boolean }[];
+}
+
 // 실제 URL에서 추출한 SEO 신호
 export interface PageSignals {
   url: string
@@ -232,6 +263,8 @@ export interface PageSignals {
   hasUALegacy: boolean
   hasFbPixel: boolean
   hasNaverAnalytics: boolean
+  // v0.7.1: Shopify 전용 신호 (쇼피파이 감지 시에만 채워짐)
+  shopify?: ShopifySignals
 }
 
 // 스트리밍 분석 이벤트

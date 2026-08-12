@@ -178,6 +178,144 @@ export async function fetchPageSignals(targetUrl: string, emit?: EmitFn): Promis
     ts: now(),
   })
 
+  // ── Shopify 감지 및 AI 가시성 신호 추출 ────────────────────────────────────
+  const isShopify =
+    /cdn\.shopify\.com/i.test(html) ||
+    /shopify\.theme/i.test(html) ||
+    /myshopify\.com/i.test(targetUrl) ||
+    /<meta[^>]+name=["']shopify-[^"']+["']/i.test(html) ||
+    /window\.Shopify\s*=/i.test(html)
+
+  if (isShopify) {
+    emit?.({ type: 'step', msg: '🛍️ Shopify 스토어 감지 — AI 가시성 체크리스트 분석 중...', level: 'info', ts: now() })
+
+    // JSON-LD 타입 목록
+    const ldTypes = jsonLdRaw.flatMap((raw) => {
+      try {
+        const obj = JSON.parse(raw) as Record<string, unknown>
+        const collect = (o: Record<string, unknown>): string[] => {
+          const types: string[] = []
+          if (typeof o['@type'] === 'string') types.push(o['@type'])
+          if (Array.isArray(o['@type'])) types.push(...(o['@type'] as string[]))
+          for (const v of Object.values(o)) {
+            if (v && typeof v === 'object' && !Array.isArray(v)) {
+              types.push(...collect(v as Record<string, unknown>))
+            }
+          }
+          return types
+        }
+        return collect(obj)
+      } catch { return [] }
+    })
+
+    const hasProductSchema     = ldTypes.some(t => /^product$/i.test(t))
+    const hasOfferSchema       = ldTypes.some(t => /^offer(s)?$/i.test(t))
+    const hasAggregateRating   = ldTypes.some(t => /^aggregaterating$/i.test(t))
+    const hasFaqSchema         = ldTypes.some(t => /^faqpage$/i.test(t))
+    const hasBreadcrumbSchema  = ldTypes.some(t => /^breadcrumblist$/i.test(t))
+    const hasOrganizationSchema = ldTypes.some(t => /^(organization|brand|store)$/i.test(t))
+
+    // 콘텐츠·브랜드 신호
+    const hasBlogSection  = /href=["'][^"']*\/blogs\//i.test(html)
+    const hasAboutPage    = /href=["'][^"']*\/pages\/(?:about|brand|who-we-are|our-story)/i.test(html)
+    const hasContactPage  = /href=["'][^"']*\/pages\/contact/i.test(html)
+
+    // 리뷰 앱 감지
+    const reviewAppDetected = /judgeme|judge\.me/i.test(html)
+      ? 'Judge.me'
+      : /okendo\.io/i.test(html)
+      ? 'Okendo'
+      : /yotpo/i.test(html)
+      ? 'Yotpo'
+      : /stamped\.io/i.test(html)
+      ? 'Stamped.io'
+      : /loox\.io/i.test(html)
+      ? 'Loox'
+      : undefined
+
+    // IndexNow
+    const hasIndexNow = /indexnow/i.test(html)
+
+    // AI 크롤러 접근 상태
+    const oaiSearchBotStatus = interpretBotAccess(robotsTxt, 'oai-searchbot')
+    const gptBotStatus       = interpretBotAccess(robotsTxt, 'gptbot')
+
+    // ── 점수 계산 ─────────────────────────────────────────────────────────────
+    type ScoreEntry = { label: string; earned: number; max: number; pass: boolean }
+    const breakdown: ScoreEntry[] = [
+      {
+        label: 'OAI-SearchBot 접근 허용',
+        max: 20,
+        pass: oaiSearchBotStatus !== 'explicitly_blocked',
+        earned: oaiSearchBotStatus !== 'explicitly_blocked' ? 20 : 0,
+      },
+      {
+        label: 'Product JSON-LD 스키마',
+        max: 20,
+        pass: hasProductSchema,
+        earned: hasProductSchema ? 20 : 0,
+      },
+      {
+        label: 'Offer.price 스키마 (가격 구조화)',
+        max: 15,
+        pass: hasOfferSchema,
+        earned: hasOfferSchema ? 15 : 0,
+      },
+      {
+        label: 'AggregateRating (리뷰 스키마)',
+        max: 15,
+        pass: hasAggregateRating,
+        earned: hasAggregateRating ? 15 : 0,
+      },
+      {
+        label: '블로그 섹션 활성화',
+        max: 10,
+        pass: hasBlogSection,
+        earned: hasBlogSection ? 10 : 0,
+      },
+      {
+        label: 'FAQPage 스키마',
+        max: 10,
+        pass: hasFaqSchema,
+        earned: hasFaqSchema ? 10 : 0,
+      },
+      {
+        label: '브랜드 About 페이지',
+        max: 10,
+        pass: hasAboutPage,
+        earned: hasAboutPage ? 10 : 0,
+      },
+    ]
+
+    const shopifyAiScore = breakdown.reduce((s, b) => s + b.earned, 0)
+
+    signals.shopify = {
+      isShopify: true,
+      oaiSearchBotStatus,
+      gptBotStatus,
+      hasProductSchema,
+      hasOfferSchema,
+      hasAggregateRating,
+      hasFaqSchema,
+      hasBreadcrumbSchema,
+      hasOrganizationSchema,
+      hasBlogSection,
+      hasAboutPage,
+      hasContactPage,
+      reviewAppDetected,
+      hasIndexNow,
+      shopifyAiScore,
+      scoreBreakdown: breakdown,
+    }
+
+    emit?.({
+      type: 'step',
+      msg: `🛍️ Shopify AI 점수 ${shopifyAiScore}/100 — Product: ${hasProductSchema ? '✅' : '❌'} | AggRating: ${hasAggregateRating ? '✅' : '❌'} | Blog: ${hasBlogSection ? '✅' : '❌'}`,
+      level: shopifyAiScore >= 70 ? 'success' : shopifyAiScore >= 40 ? 'info' : 'warn',
+      ts: now(),
+    })
+  }
+
   return signals
 }
 
