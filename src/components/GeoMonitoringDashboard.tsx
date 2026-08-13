@@ -19,6 +19,7 @@ import {
 import type { GeoStreamEvent } from '../lib/geoMonitorLib'
 import { GeoActionPanel } from './GeoActionPanel'
 import { GeoComparisonPanel } from './GeoComparisonPanel'
+import { GeoApiKeySettings } from './GeoApiKeySettings'
 
 // ── 상수 ─────────────────────────────────────────────────────────────────
 
@@ -403,7 +404,8 @@ export function GeoMonitoringDashboard() {
     }
   }
 
-  const latestRun = state.runs[0]
+  // 모든 엔진이 실패한 과거 실행은 실측 결과로 취급하지 않는다.
+  const latestRun = state.runs.find(run => (run.aggregated ?? []).some(result => !result.error))
   const latestSummary = latestRun ? summarizeByQuery(latestRun.aggregated ?? []) : []
   const latestCompetitors = latestRun ? topCompetitors(latestRun.aggregated ?? []) : []
 
@@ -445,6 +447,8 @@ export function GeoMonitoringDashboard() {
           <Globe className="w-4 h-4 text-[#4f6df5]" />
           <span className="text-sm font-bold text-[#1b2559]">모니터링 설정</span>
         </div>
+
+        <GeoApiKeySettings />
 
         {/* 도메인 + 브랜드 */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -533,9 +537,7 @@ export function GeoMonitoringDashboard() {
           </div>
         </div>
 
-        <p className="text-[10px] text-[#737c9c]">
-          ※ 각 엔진은 서버 환경변수(PPLX_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY, NAVER_CLOVA_API_KEY)가 설정된 경우만 작동합니다.
-        </p>
+        <p className="text-[10px] text-[#737c9c]">내부 운영 API 키 또는 서버 환경변수가 연결된 엔진만 측정할 수 있습니다.</p>
         <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-900 flex items-center justify-between gap-3">
           <span>예상 외부 API 호출량</span>
           <strong>{state.queries.length * engines.length * state.repeatCount}회</strong>

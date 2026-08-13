@@ -10,6 +10,7 @@ import { adminTelemetry } from './src/server/modules/admin/adminService.ts'
 import { runGeoMonitor, calcCitationRates } from './src/server/geoMonitor.ts'
 import { expandGeoQueries } from './src/server/geoQueryExpander.ts'
 import type { GeoEngine, GeoQuery } from './src/types.ts'
+import { getInternalApiKeys, getInternalApiKeyStatus, removeInternalApiKey, setInternalApiKey } from './src/server/internalApiKeys.ts'
 
 export default defineConfig({
   plugins: [
@@ -18,6 +19,14 @@ export default defineConfig({
     {
       name: 'seo-analyzer-api',
       configureServer(server: ViteDevServer) {
+        const environmentGeoKeys = (): Partial<Record<GeoEngine, string>> => ({
+          perplexity: process.env.PPLX_API_KEY,
+          chatgpt: process.env.OPENAI_API_KEY,
+          claude: process.env.ANTHROPIC_API_KEY,
+          gemini: process.env.GEMINI_API_KEY,
+          naver: process.env.NAVER_CLOVA_API_KEY,
+        })
+
         // OWASP Security Headers Middleware
         server.middlewares.use((_req, res, next) => {
           res.setHeader('X-Content-Type-Options', 'nosniff')
@@ -102,6 +111,45 @@ export default defineConfig({
           })
         })
 
+        // 내부 운영용 API 키 — 개발 서버 메모리에만 보관하며 브라우저 저장소에는 남기지 않음
+        server.middlewares.use('/api/internal-api-keys', (req: IncomingMessage, res: ServerResponse) => {
+          const localAddress = req.socket.remoteAddress ?? ''
+          if (!/^(::1|127\.0\.0\.1|::ffff:127\.0\.0\.1)$/.test(localAddress)) {
+            res.writeHead(403, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ error: '로컬 환경에서만 설정할 수 있습니다.' }))
+            return
+          }
+          if (req.method === 'GET') {
+            res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+            res.end(JSON.stringify({ status: getInternalApiKeyStatus(environmentGeoKeys()) }))
+            return
+          }
+          if (req.method !== 'POST' && req.method !== 'DELETE') {
+            res.writeHead(405, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ error: 'Method not allowed' }))
+            return
+          }
+          const chunks: Buffer[] = []
+          req.on('data', (chunk: Buffer) => chunks.push(chunk))
+          req.on('end', () => {
+            try {
+              const body = JSON.parse(Buffer.concat(chunks).toString() || '{}') as { engine?: GeoEngine; apiKey?: string }
+              const allowed = new Set<GeoEngine>(['perplexity', 'chatgpt', 'claude', 'gemini', 'naver'])
+              if (!body.engine || !allowed.has(body.engine)) throw new Error('지원하지 않는 엔진입니다.')
+              if (req.method === 'DELETE') removeInternalApiKey(body.engine)
+              else {
+                if (!body.apiKey || body.apiKey.trim().length < 8 || body.apiKey.length > 500) throw new Error('API 키 형식을 확인해주세요.')
+                setInternalApiKey(body.engine, body.apiKey)
+              }
+              res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' })
+              res.end(JSON.stringify({ status: getInternalApiKeyStatus(environmentGeoKeys()) }))
+            } catch (error) {
+              res.writeHead(400, { 'Content-Type': 'application/json' })
+              res.end(JSON.stringify({ error: String(error) }))
+            }
+          })
+        })
+
         // GEO 모니터링 API (Module C)
         server.middlewares.use('/api/geo-monitor', (req: IncomingMessage, res: ServerResponse) => {
           if (req.method !== 'POST') {
@@ -147,11 +195,14 @@ export default defineConfig({
 
               // API 키: 환경변수 우선
               const apiKeys: Partial<Record<GeoEngine, string>> = {
-                perplexity : process.env.PPLX_API_KEY,
-                chatgpt    : process.env.OPENAI_API_KEY,
-                claude     : process.env.ANTHROPIC_API_KEY,
-                gemini     : process.env.GEMINI_API_KEY,
-                naver      : process.env.NAVER_CLOVA_API_KEY,   // P2-1
+                ...environmentGeoKeys(),
+                ...getInternalApiKeys(),
+              }
+
+              const unavailable = engines.filter(engine => !apiKeys[engine])
+              if (unavailable.length) {
+                emit({ type: 'error', msg: `API 키가 없는 엔진: ${unavailable.join(', ')}. 설정에서 키를 등록하거나 해당 엔진을 해제해주세요.`, ts: Date.now() })
+                return
               }
 
               const aggregated = await runGeoMonitor({
