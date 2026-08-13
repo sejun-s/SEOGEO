@@ -23,6 +23,7 @@ import { ReportActions } from './components/ReportActions';
 import { ShopifyPanel } from './components/ShopifyPanel';
 import { NaverReadinessPanel } from './components/NaverReadinessPanel';
 import { GeoMonitoringDashboard } from './components/GeoMonitoringDashboard';
+import { GeoIntegrationPanel } from './components/GeoIntegrationPanel';
 
 const HISTORY_KEY = 'seo-analyzer-history';
 
@@ -655,6 +656,11 @@ export function App() {
                         audit={selectedAudit}
                         onSelectDetailTab={handleSelectBlockTab}
                         filterIds={['chatgpt', 'geo', 'eeat']}
+                      />
+                      {/* P1-1: GEO 인용률 연동 패널 */}
+                      <GeoIntegrationPanel
+                        audit={selectedAudit}
+                        onGoToGeo={() => setTopTab('geo-monitoring')}
                       />
                       {/* AI 인용 관련 개선 항목 */}
                       <div id="action-hub" className="scroll-mt-24">
