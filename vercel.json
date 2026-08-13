@@ -5,6 +5,12 @@
   "functions": {
     "api/analyze.ts": {
       "maxDuration": 60
+    },
+    "api/geo-monitor.ts": {
+      "maxDuration": 300
+    },
+    "api/geo-expand-queries.ts": {
+      "maxDuration": 60
     }
   }
 }
