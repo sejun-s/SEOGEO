@@ -109,6 +109,12 @@ export default defineConfig({
             res.end(JSON.stringify({ error: 'Method not allowed' }))
             return
           }
+          const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1'
+          if (!checkRateLimit(`geo:${clientIp}`, 5, 60_000)) {
+            res.writeHead(429, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ error: 'GEO 측정 요청 한도 초과: 1분 후 다시 시도해 주세요.' }))
+            return
+          }
           const chunks: Buffer[] = []
           req.on('data', (c: Buffer) => chunks.push(c))
           req.on('end', async () => {
@@ -130,6 +136,15 @@ export default defineConfig({
                 repeatCount   : number
               }
 
+              const allowedEngines = new Set<GeoEngine>(['perplexity', 'chatgpt', 'claude', 'gemini', 'naver'])
+              const engines = Array.from(new Set(body.engines ?? [])).filter(engine => allowedEngines.has(engine)).slice(0, 5)
+              const queries = (body.queries ?? []).filter(query => typeof query?.text === 'string' && query.text.trim().length >= 2).slice(0, 30)
+              const repeatCount = [1, 3, 5].includes(body.repeatCount) ? body.repeatCount : 1
+              if (!body.targetDomain?.trim() || !body.targetBrand?.trim() || !queries.length || !engines.length) {
+                emit({ type: 'error', msg: '도메인·브랜드·질의·엔진을 모두 입력해주세요.', ts: Date.now() })
+                return
+              }
+
               // API 키: 환경변수 우선
               const apiKeys: Partial<Record<GeoEngine, string>> = {
                 perplexity : process.env.PPLX_API_KEY,
@@ -140,17 +155,17 @@ export default defineConfig({
               }
 
               const aggregated = await runGeoMonitor({
-                targetDomain  : body.targetDomain,
-                targetBrand   : body.targetBrand,
-                brandSynonyms : body.brandSynonyms ?? [],
-                queries       : body.queries,
-                engines       : body.engines,
-                repeatCount   : body.repeatCount ?? 1,
+                targetDomain  : body.targetDomain.trim().slice(0, 253),
+                targetBrand   : body.targetBrand.trim().slice(0, 100),
+                brandSynonyms : (body.brandSynonyms ?? []).slice(0, 10),
+                queries,
+                engines,
+                repeatCount,
                 apiKeys,
                 emit,
               })
 
-              const { rates, overall } = calcCitationRates(aggregated, body.engines)
+              const { rates, overall } = calcCitationRates(aggregated, engines)
               emit({ type: 'geo-result', aggregated, citationRates: rates, overallCitationRate: overall, ts: Date.now() })
             } catch (err) {
               emit({ type: 'error', msg: String(err), ts: Date.now() })

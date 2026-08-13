@@ -95,6 +95,11 @@ export async function runGeoCheck(
     body   : JSON.stringify(params),
   })
 
+  if (!res.ok) {
+    const message = await res.text()
+    throw new Error(`GEO API 오류 (${res.status}): ${message.slice(0, 200)}`)
+  }
+
   if (!res.body) throw new Error('스트리밍 응답을 받지 못했습니다.')
 
   const reader  = res.body.getReader()

@@ -22,8 +22,9 @@ function buildSummaryText(audit: AuditResult): string {
     lines.push(`  SEO 기반 점수 : ${audit.seoFoundationScore}`);
   }
   if (audit.aiCitationReadinessScore !== undefined) {
-    lines.push(`  AI 인용 준비도: ${audit.aiCitationReadinessScore}`);
+    lines.push(`  AI 검색 가시성: ${audit.aiCitationReadinessScore}`);
   }
+  lines.push(`  네이버 노출 기반: ${audit.naverScore ?? '미측정'}`);
   if (audit.summary) {
     lines.push(``, `💬 요약`, audit.summary);
   }

@@ -22,12 +22,12 @@ import { GeoComparisonPanel } from './GeoComparisonPanel'
 
 // ── 상수 ─────────────────────────────────────────────────────────────────
 
-const ENGINE_META: Record<GeoEngine, { label: string; color: string; bg: string; border: string }> = {
-  perplexity: { label: 'Perplexity', color: 'text-teal-700',   bg: 'bg-teal-50',   border: 'border-teal-200' },
-  chatgpt   : { label: 'ChatGPT',    color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
-  claude    : { label: 'Claude',     color: 'text-violet-700',  bg: 'bg-violet-50',  border: 'border-violet-200' },
-  gemini    : { label: 'Gemini',     color: 'text-blue-700',    bg: 'bg-blue-50',    border: 'border-blue-200' },
-  naver     : { label: '네이버 AI',   color: 'text-green-700',   bg: 'bg-green-50',   border: 'border-green-200' },
+const ENGINE_META: Record<GeoEngine, { label: string; mode: string; color: string; bg: string; border: string }> = {
+  perplexity: { label: 'Perplexity', mode: '검색·출처', color: 'text-teal-700',   bg: 'bg-teal-50',   border: 'border-teal-200' },
+  chatgpt   : { label: 'ChatGPT',    mode: 'Web Search', color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+  claude    : { label: 'Claude',     mode: '참고 응답', color: 'text-violet-700',  bg: 'bg-violet-50',  border: 'border-violet-200' },
+  gemini    : { label: 'Gemini',     mode: 'Search Grounding', color: 'text-blue-700',    bg: 'bg-blue-50',    border: 'border-blue-200' },
+  naver     : { label: '네이버 AI',   mode: '베타', color: 'text-green-700',   bg: 'bg-green-50',   border: 'border-green-200' },
 }
 
 const ALL_ENGINES: GeoEngine[] = ['perplexity', 'chatgpt', 'claude', 'gemini', 'naver']
@@ -343,7 +343,7 @@ function QueryEditor({
 
 export function GeoMonitoringDashboard() {
   const [state, setState]               = useState<GeoMonitoringState>(loadGeoState)
-  const [engines, setEngines]           = useState<GeoEngine[]>(['perplexity', 'claude'])
+  const [engines, setEngines]           = useState<GeoEngine[]>(['perplexity'])
   const [isRunning, setIsRunning]       = useState(false)
   const [progress, setProgress]         = useState<{ done: number; total: number; engine: string; query: string } | null>(null)
   const [error, setError]               = useState<string | null>(null)
@@ -497,6 +497,7 @@ export function GeoMonitoringDashboard() {
                   >
                     <span className={`w-2 h-2 rounded-full ${checked ? 'bg-current' : 'bg-slate-300'}`} />
                     {m.label}
+                    <span className="text-[9px] opacity-70">{m.mode}</span>
                   </button>
                 )
               })}
@@ -535,6 +536,10 @@ export function GeoMonitoringDashboard() {
         <p className="text-[10px] text-[#737c9c]">
           ※ 각 엔진은 서버 환경변수(PPLX_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY, NAVER_CLOVA_API_KEY)가 설정된 경우만 작동합니다.
         </p>
+        <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] text-blue-900 flex items-center justify-between gap-3">
+          <span>예상 외부 API 호출량</span>
+          <strong>{state.queries.length * engines.length * state.repeatCount}회</strong>
+        </div>
       </div>
 
       {/* ── 질의 패널 ── */}

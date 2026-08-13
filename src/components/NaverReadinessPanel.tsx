@@ -32,6 +32,7 @@ function Row({ status, label, value, tip }: { status: Ck; label: string; value: 
 
 export function NaverReadinessPanel({ audit }: NaverReadinessPanelProps) {
   const s = audit.pageSignals
+  const hasNaverScore = typeof audit.naverScore === 'number'
   const naverScore = audit.naverScore ?? 0
 
   // Yeti 봇 접근 여부 (botPolicies에서 확인)
@@ -56,15 +57,15 @@ export function NaverReadinessPanel({ audit }: NaverReadinessPanelProps) {
       <div className="glass-card p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-sm font-bold text-white">네이버 검색 준비도</h3>
+            <h3 className="text-sm font-bold text-white">네이버 노출 기반</h3>
             <p className="text-[11px] text-slate-500 mt-0.5">Yeti 수집 · 서치어드바이저 · 네이버 Analytics</p>
           </div>
-          <div className="flex items-baseline gap-1">
+          {hasNaverScore ? <div className="flex items-baseline gap-1">
             <span className={`text-3xl font-black font-mono ${scoreColor}`}>{naverScore}</span>
             <span className="text-xs text-slate-500">/100</span>
-          </div>
+          </div> : <span className="rounded-full bg-slate-700/70 px-3 py-1.5 text-xs font-bold text-slate-200">재분석 필요</span>}
         </div>
-        <div className="h-2 bg-white/8 rounded-full overflow-hidden">
+        <div className={`h-2 bg-white/8 rounded-full overflow-hidden ${hasNaverScore ? '' : 'opacity-40'}`}>
           <div className={`h-full ${scoreBarColor} rounded-full transition-all duration-700`} style={{ width: `${naverScore}%` }} />
         </div>
       </div>

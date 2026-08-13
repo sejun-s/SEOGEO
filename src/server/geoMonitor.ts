@@ -17,6 +17,25 @@ interface PerplexityResponse {
   citations?: string[]   // P0-1: 실제 인용 URL 배열
 }
 
+interface OpenAIResponsesResult {
+  output_text?: string
+  output?: Array<{
+    content?: Array<{
+      text?: string
+      annotations?: Array<{ type?: string; url?: string }>
+    }>
+  }>
+}
+
+interface GeminiGroundedResult {
+  candidates?: Array<{
+    content?: { parts?: Array<{ text?: string }> }
+    groundingMetadata?: {
+      groundingChunks?: Array<{ web?: { uri?: string } }>
+    }
+  }>
+}
+
 // ── P0-1: 인용 감지 (텍스트 + citations[] URL + 동의어) ──────────────────
 
 function buildSearchTerms(
@@ -151,22 +170,18 @@ async function queryOpenAI(
   queryText: string,
   apiKey   : string,
 ): Promise<{ text: string; citationUrls: string[] }> {
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+  const res = await fetch('https://api.openai.com/v1/responses', {
     method : 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization : `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model     : 'gpt-4o-mini',
-      messages  : [
-        {
-          role   : 'system',
-          content: '당신은 검색 어시스턴트입니다. 사용자의 질문에 대해 관련 웹사이트와 브랜드를 구체적으로 언급하며 답변하세요.',
-        },
-        { role: 'user', content: queryText },
-      ],
-      max_tokens: 600,
+      model: 'gpt-5-mini',
+      instructions: '웹 검색 결과에 근거해 답하고, 관련 브랜드와 출처를 명확히 제시하세요.',
+      input: queryText,
+      tools: [{ type: 'web_search' }],
+      max_output_tokens: 700,
     }),
   })
 
@@ -175,8 +190,14 @@ async function queryOpenAI(
     throw new Error(`OpenAI API error ${res.status}: ${err.slice(0, 200)}`)
   }
 
-  const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> }
-  return { text: data.choices?.[0]?.message?.content ?? '', citationUrls: [] }
+  const data = await res.json() as OpenAIResponsesResult
+  const text = data.output_text ?? (data.output ?? []).flatMap(item => item.content ?? []).map(item => item.text ?? '').join('')
+  const citationUrls = (data.output ?? [])
+    .flatMap(item => item.content ?? [])
+    .flatMap(item => item.annotations ?? [])
+    .filter(annotation => annotation.type === 'url_citation' && typeof annotation.url === 'string')
+    .map(annotation => annotation.url!)
+  return { text, citationUrls: Array.from(new Set(citationUrls)) }
 }
 
 // ── Claude ─────────────────────────────────────────────────────────────────
@@ -219,12 +240,13 @@ async function queryGemini(
   apiKey   : string,
 ): Promise<{ text: string; citationUrls: string[] }> {
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
     {
       method : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body   : JSON.stringify({
-        contents       : [{ parts: [{ text: `당신은 웹 검색 기반 AI 어시스턴트입니다. 관련 웹사이트와 브랜드를 명시하며 답변하세요.\n\n${queryText}` }] }],
+        contents       : [{ parts: [{ text: `Google 검색 결과에 근거해 관련 웹사이트와 브랜드를 명시하며 답변하세요.\n\n${queryText}` }] }],
+        tools          : [{ google_search: {} }],
         generationConfig: { maxOutputTokens: 600 },
       }),
     },
@@ -235,8 +257,14 @@ async function queryGemini(
     throw new Error(`Gemini API error ${res.status}: ${err.slice(0, 200)}`)
   }
 
-  const data = await res.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }
-  return { text: data.candidates?.[0]?.content?.parts?.[0]?.text ?? '', citationUrls: [] }
+  const data = await res.json() as GeminiGroundedResult
+  const candidate = data.candidates?.[0]
+  return {
+    text: candidate?.content?.parts?.map(part => part.text ?? '').join('') ?? '',
+    citationUrls: Array.from(new Set((candidate?.groundingMetadata?.groundingChunks ?? [])
+      .map(chunk => chunk.web?.uri)
+      .filter((url): url is string => typeof url === 'string'))),
+  }
 }
 
 // ── P2-1: 네이버 HyperCLOVA X (한국 시장 특화) ────────────────────────────
@@ -503,9 +531,9 @@ export function calcCitationRates(
 
   for (const engine of engines) {
     const engineResults = aggregated.filter(r => r.engine === engine && !r.error)
-    rates[engine] = engineResults.length > 0
-      ? Math.round(engineResults.reduce((sum, r) => sum + r.citationRate, 0) / engineResults.length)
-      : 0
+    if (engineResults.length > 0) {
+      rates[engine] = Math.round(engineResults.reduce((sum, r) => sum + r.citationRate, 0) / engineResults.length)
+    }
   }
 
   const valid   = aggregated.filter(r => !r.error)

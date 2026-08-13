@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import type { AuditResult, DetailTabType } from './types';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
-import { ScoreOverview } from './components/ScoreOverview';
+import { ReadinessOverview } from './components/ReadinessOverview';
 import { SiteCrawlPanel } from './components/SiteCrawlPanel';
 import { GlassBlockGrid } from './components/GlassBlockGrid';
 import { DetailPage } from './components/DetailPage';
@@ -521,9 +521,9 @@ export function App() {
                     {mainTab === 'seo' && !showCompare && (
                       <div className="flex gap-1 pb-2 pt-1">
                         {([
-                          { id: 'technical',   label: 'SEO 기술 준비도' },
-                          { id: 'ai-citation', label: 'AI 인용 준비도' },
-                          { id: 'naver',       label: '네이버 검색 준비도' },
+                          { id: 'technical',   label: 'SEO 기반 품질' },
+                          { id: 'ai-citation', label: 'AI 검색 가시성' },
+                          { id: 'naver',       label: '네이버 노출 기반' },
                         ] as { id: 'technical' | 'ai-citation' | 'naver'; label: string }[]).map(({ id, label }) => (
                           <button
                             key={id}
@@ -602,7 +602,7 @@ export function App() {
                 {topTab === 'seo-geo' && !showCompare && mainTab === 'seo' && (<>
                 {/* 항상 보이는 영역: 보고서 액션 + 종합 점수 개요 */}
                 <ReportActions audit={selectedAudit} />
-                <ScoreOverview audit={selectedAudit} />
+                <ReadinessOverview audit={selectedAudit} mode={urlSubTab} />
 
                 {/* DetailPage는 서브탭 무관하게 오버레이 */}
                 {viewMode === 'detail' ? (
@@ -615,7 +615,7 @@ export function App() {
                   />
                 ) : (<>
 
-                  {/* ── 서브탭 1: SEO 기술 준비도 ── */}
+                  {/* ── 서브탭 1: SEO 기반 품질 ── */}
                   {urlSubTab === 'technical' && (
                     <div className="space-y-6 animate-fadeInUp">
                       <GlassBlockGrid
@@ -635,6 +635,7 @@ export function App() {
                           audit={selectedAudit}
                           onReanalyze={handleScanUrl}
                           isScanning={isScanning}
+                          filterCategories={['technical', 'schema', 'bing']}
                         />
                       </div>
                       {showLog && (analysisEvents.length > 0 || analysisSignals) && (
@@ -649,7 +650,7 @@ export function App() {
                     </div>
                   )}
 
-                  {/* ── 서브탭 2: AI 인용 준비도 ── */}
+                  {/* ── 서브탭 2: AI 검색 가시성 ── */}
                   {urlSubTab === 'ai-citation' && (
                     <div className="space-y-6 animate-fadeInUp">
                       <GlassBlockGrid
@@ -674,10 +675,18 @@ export function App() {
                     </div>
                   )}
 
-                  {/* ── 서브탭 3: 네이버 검색 준비도 ── */}
+                  {/* ── 서브탭 3: 네이버 노출 기반 ── */}
                   {urlSubTab === 'naver' && (
                     <div className="space-y-4 animate-fadeInUp">
                       <NaverReadinessPanel audit={selectedAudit} />
+                      <div id="action-hub" className="scroll-mt-24">
+                        <FixChecklist
+                          audit={selectedAudit}
+                          onReanalyze={handleScanUrl}
+                          isScanning={isScanning}
+                          filterCategories={['naver']}
+                        />
+                      </div>
                     </div>
                   )}
 

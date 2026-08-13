@@ -32,8 +32,24 @@ export default async function handler(req: any, res: any) {
       repeatCount  : number
     }
 
-    if (!body.queries?.length || !body.engines?.length) {
+    const domain = String(body.targetDomain ?? '').trim().toLowerCase()
+    const brand = String(body.targetBrand ?? '').trim()
+    const allowedEngines = new Set<GeoEngine>(['perplexity', 'chatgpt', 'claude', 'gemini', 'naver'])
+    const engines = Array.from(new Set(body.engines ?? [])).filter(engine => allowedEngines.has(engine)).slice(0, 5)
+    const queries = (body.queries ?? [])
+      .filter(query => typeof query?.text === 'string' && query.text.trim().length >= 2)
+      .slice(0, 30)
+      .map(query => ({ ...query, text: query.text.trim().slice(0, 300) }))
+    const repeatCount = [1, 3, 5].includes(body.repeatCount) ? body.repeatCount : 1
+
+    if (!domain || !brand || !queries.length || !engines.length) {
       emit({ type: 'error', msg: '질의와 엔진을 1개 이상 지정해주세요.', ts: Date.now() })
+      res.end()
+      return
+    }
+
+    if (!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(domain.replace(/^https?:\/\//, '').split('/')[0])) {
+      emit({ type: 'error', msg: '유효한 공개 도메인을 입력해주세요.', ts: Date.now() })
       res.end()
       return
     }
@@ -47,12 +63,12 @@ export default async function handler(req: any, res: any) {
     }
 
     const aggregated = await runGeoMonitor({
-      targetDomain : body.targetDomain,
-      targetBrand  : body.targetBrand,
-      brandSynonyms: body.brandSynonyms ?? [],
-      queries      : body.queries,
-      engines      : body.engines,
-      repeatCount  : body.repeatCount ?? 1,
+      targetDomain : domain,
+      targetBrand  : brand.slice(0, 100),
+      brandSynonyms: (body.brandSynonyms ?? []).filter(value => typeof value === 'string').slice(0, 10).map(value => value.trim().slice(0, 100)),
+      queries,
+      engines,
+      repeatCount,
       apiKeys,
       emit,
     })

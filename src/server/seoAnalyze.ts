@@ -626,7 +626,7 @@ export function calcCategoryScore(s: PageSignals): CategoryScores {
     searchEligibility:         eligibility,
     measurementConfidence:     confidence,
     schemaEvaluationLevel:     schemaLevel,
-    scoreModelVersion:         'v0.6-r1',
+    scoreModelVersion:         'v1.0-r1',
   }
 }
 
