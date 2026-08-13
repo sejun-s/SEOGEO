@@ -626,7 +626,7 @@ export function calcCategoryScore(s: PageSignals): CategoryScores {
     searchEligibility:         eligibility,
     measurementConfidence:     confidence,
     schemaEvaluationLevel:     schemaLevel,
-    scoreModelVersion:         'v1.0-r1',
+    scoreModelVersion:         'v1.0-r2',
   }
 }
 
@@ -1155,7 +1155,7 @@ export function generateRuleBasedResult(signals: PageSignals, scores: CategorySc
 
   const ruleResults = criteria.map(c => ({
     ruleId: c.id,
-    ruleVersion: 'v0.6-r1',
+    ruleVersion: 'v1.0-r2',
     title: c.name,
     category: c.category,
     status: (c.status === 'pass' ? 'pass' : c.status === 'fail' ? 'fail' : 'warning') as 'pass' | 'warning' | 'fail' | 'unknown' | 'not_applicable',
@@ -1163,7 +1163,10 @@ export function generateRuleBasedResult(signals: PageSignals, scores: CategorySc
     applicable: true,
     observedValue: c.currentState,
     rawEvidence: c.scoringBasis,
-    evidenceType: (c.priority === 'critical' ? 'official_requirement' : 'official_recommendation') as 'official_requirement' | 'official_recommendation',
+    evidenceType: (c.category === 'geo' ? 'research_evidence'
+      : c.category === 'analytics' ? 'product_heuristic'
+      : c.category === 'technical' && c.id.includes('https') ? 'web_standard'
+      : 'official_recommendation') as 'official_recommendation' | 'web_standard' | 'research_evidence' | 'product_heuristic',
     scoreEffect: c.priority === 'critical' ? '영향도 높음' : '영향도 중간',
     recommendation: c.improvement,
     verificationMethod: 'URL 파싱 자동 검증',

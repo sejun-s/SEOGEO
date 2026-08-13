@@ -49,7 +49,9 @@ export function GeoIntegrationPanel({ audit, onGoToGeo }: Props) {
     // 동일 도메인의 가장 최근 GEO 실행 찾기
     const matched = state.runs.find(r => {
       const runDomain = domainOf(r.targetDomain)
-      return runDomain === auditDomain || r.targetDomain.includes(auditDomain) || auditDomain.includes(runDomain)
+      const sameDomain = runDomain === auditDomain || r.targetDomain.includes(auditDomain) || auditDomain.includes(runDomain)
+      const hasValidMeasurement = (r.aggregated ?? []).some(result => !result.error)
+      return sameDomain && hasValidMeasurement
     })
     return { matchedRun: matched, geoState: state }
   }, [audit.url])

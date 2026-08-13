@@ -522,7 +522,7 @@ export function App() {
                       <div className="flex gap-1 pb-2 pt-1">
                         {([
                           { id: 'technical',   label: 'SEO 기반 품질' },
-                          { id: 'ai-citation', label: 'AI 검색 가시성' },
+                          { id: 'ai-citation', label: 'GEO 인용 준비도' },
                           { id: 'naver',       label: '네이버 노출 기반' },
                         ] as { id: 'technical' | 'ai-citation' | 'naver'; label: string }[]).map(({ id, label }) => (
                           <button
@@ -650,7 +650,7 @@ export function App() {
                     </div>
                   )}
 
-                  {/* ── 서브탭 2: AI 검색 가시성 ── */}
+                  {/* ── 서브탭 2: GEO 인용 준비도 ── */}
                   {urlSubTab === 'ai-citation' && (
                     <div className="space-y-6 animate-fadeInUp">
                       <GlassBlockGrid

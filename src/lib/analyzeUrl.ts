@@ -133,7 +133,7 @@ function mapAIResponseToAudit(url: string, ai: AIAnalysisResponse, signals?: Pag
     ...(signals ? (() => {
       const v3 = calcCategoryScore(signals)
       return {
-        scoreModelVersion: 'v1.0-r1',
+        scoreModelVersion: 'v1.0-r2',
         legacyScore: ai.overallScore,
         searchEligibility: v3.searchEligibility,
         seoFoundationScore: v3.seoFoundationScore as number,

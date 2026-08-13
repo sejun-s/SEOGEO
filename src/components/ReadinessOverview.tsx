@@ -1,5 +1,6 @@
 import type { AuditResult, CriteriaItem } from '../types'
 import { ArrowRight, ExternalLink, Info, Search, Sparkles, Target } from 'lucide-react'
+import { CONFIDENCE_LABEL, summarizeEvidence } from '../lib/readinessEvidence'
 
 export type ReadinessMode = 'technical' | 'ai-citation' | 'naver'
 
@@ -31,9 +32,9 @@ const MODE_CONFIG: Record<ReadinessMode, {
     ],
   },
   'ai-citation': {
-    eyebrow: 'AI SEARCH VISIBILITY',
-    title: 'AI 검색 가시성',
-    description: 'AI 검색 서비스가 브랜드와 콘텐츠를 발견하고 답변 근거로 활용하기 좋은지 평가합니다.',
+    eyebrow: 'GEO CITATION READINESS',
+    title: 'GEO 인용 준비도',
+    description: '공개 웹 신호를 기준으로 AI 검색이 콘텐츠를 발견하고 답변 근거로 활용하기 좋은 구조인지 평가합니다. 실제 인용률은 포함하지 않습니다.',
     categories: ['chatgpt', 'geo', 'eeat'],
     score: audit => audit.aiCitationReadinessScore ?? Math.round((audit.chatGptSearchScore + audit.academicGeoScore) / 2),
     signals: [
@@ -71,6 +72,8 @@ export function ReadinessOverview({ audit, mode }: Props) {
     label: signal.label,
     score: Number(audit[signal.key] ?? 0),
   }))
+  const evidence = summarizeEvidence(audit.ruleResults ?? [], config.categories)
+  const eligibility = audit.searchEligibility?.status ?? 'unknown'
 
   const goToAction = () => document.getElementById('action-hub')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
@@ -96,6 +99,11 @@ export function ReadinessOverview({ audit, mode }: Props) {
           <div className="v03-score-number">{score ?? '—'}<small>{score === null ? '' : '/100'}</small></div>
           <span className="v03-status-pill" style={{ color: scoreTone.text, background: scoreTone.bg }}>{scoreTone.label}</span>
           <p>{score === null ? '최신 점수 모델로 URL을 다시 분석하면 이 영역의 점수와 근거가 생성됩니다.' : config.description}</p>
+          <div className="mt-4 grid grid-cols-3 gap-2 border-t border-slate-200 pt-4 text-center">
+            <div><b className="block text-sm text-slate-900">{CONFIDENCE_LABEL[evidence.confidence]}</b><span className="text-[10px] text-slate-500">측정 신뢰도</span></div>
+            <div><b className="block text-sm text-slate-900">{evidence.measured}/{evidence.total || '—'}</b><span className="text-[10px] text-slate-500">확인 근거</span></div>
+            <div><b className="block text-sm text-slate-900">{eligibility === 'pass' ? '통과' : eligibility === 'fail' ? '실패' : eligibility === 'warning' ? '주의' : '확인 중'}</b><span className="text-[10px] text-slate-500">검색 자격</span></div>
+          </div>
         </article>
 
         <article className="rounded-3xl border border-slate-200 bg-white p-6">
@@ -133,7 +141,7 @@ export function ReadinessOverview({ audit, mode }: Props) {
         {topIssue && <button onClick={goToAction}>해결 방법 보기 <ArrowRight size={15} /></button>}
       </div>
 
-      <div className="v03-disclaimer"><Info size={14} /> {config.title}은 SEOGEO 자체 진단 지표이며 검색 순위·노출·AI 인용을 보장하지 않습니다. 자동 측정이 불가능한 항목은 점수에 임의 반영하지 않고 별도 확인 항목으로 표시합니다.</div>
+      <div className="v03-disclaimer"><Info size={14} /> {config.title} 점수는 확인 가능한 HTML·HTTP·robots.txt·구조화 데이터 기반의 자체 준비도 지수입니다. 검색 순위·노출·AI 인용을 보장하지 않으며, 확인 불가 항목은 점수에서 제외합니다. 점수 모델 {audit.scoreModelVersion ?? 'v1.0-r2'}.</div>
     </section>
   )
 }
