@@ -153,6 +153,11 @@ export async function runGeoCheck(
   }
 
   if (!finalRun) throw new Error('GEO 모니터링 결과를 받지 못했습니다.')
+  const validResults = finalRun.aggregated.filter(result => !result.error)
+  if (validResults.length === 0) {
+    const firstError = finalRun.aggregated.find(result => result.error)?.error
+    throw new Error(firstError ?? '선택한 AI 엔진에서 유효한 결과를 받지 못했습니다.')
+  }
   return finalRun
 }
 
