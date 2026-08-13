@@ -44,16 +44,18 @@ export async function fetchPageSignals(targetUrl: string, emit?: EmitFn): Promis
 
   // robots.txt
   let robotsTxt = ''
+  let robotsTxtStatus: PageSignals['robotsTxtStatus'] = 'unavailable'
   let hasSitemap = false
   try {
     const r = await fetch(`${base.origin}/robots.txt`, { headers: HEADERS, signal: AbortSignal.timeout(5000) })
     if (r.ok) {
+      robotsTxtStatus = 'found'
       robotsTxt = (await r.text()).slice(0, 3000)
       hasSitemap = robotsTxt.toLowerCase().includes('sitemap:')
       const hasOai = /oai-searchbot/i.test(robotsTxt)
       const hasGpt = /gptbot/i.test(robotsTxt)
       emit?.({ type: 'step', msg: `🤖 robots.txt 확인 — OAI-SearchBot: ${hasOai ? '명시됨' : '없음'} | GPTBot: ${hasGpt ? '명시됨' : '없음'} | Sitemap: ${hasSitemap ? '있음' : '없음'}`, level: 'info', ts: now() })
-    }
+    } else if (r.status === 404 || r.status === 410) robotsTxtStatus = 'not_found'
   } catch {
     emit?.({ type: 'step', msg: `⚠️ robots.txt 접근 불가 (정상일 수 있음)`, level: 'warn', ts: now() })
   }
@@ -80,7 +82,7 @@ export async function fetchPageSignals(targetUrl: string, emit?: EmitFn): Promis
       title: '', metaDescription: '', canonical: '', metaRobots: '',
       h1s: [], h2s: [], h3s: [],
       ogTitle: '', ogDescription: '', ogImage: '', twitterCard: '',
-      jsonLdRaw: [], robotsTxt, hasViewport: false, hasCharset: false,
+      jsonLdRaw: [], robotsTxt, robotsTxtStatus, hasViewport: false, hasCharset: false,
       wordCount: 0, internalLinks: 0, externalLinks: 0,
       imageCount: 0, imagesWithAlt: 0, hasSchema: false, hasHreflang: false, hasSitemap,
       questionHeadingCount: 0, statisticCount: 0, hasAuthorSignal: false, hasDateSignal: false, schemaParseValid: true,
@@ -172,7 +174,7 @@ export async function fetchPageSignals(targetUrl: string, emit?: EmitFn): Promis
     url: targetUrl, isHttps, statusCode, responseTime, fetchError,
     title, metaDescription, canonical, metaRobots,
     h1s, h2s, h3s, ogTitle, ogDescription, ogImage, twitterCard,
-    jsonLdRaw, robotsTxt, hasViewport, hasCharset,
+    jsonLdRaw, robotsTxt, robotsTxtStatus, hasViewport, hasCharset,
     wordCount, internalLinks, externalLinks,
     imageCount: imgTags.length, imagesWithAlt,
     hasSchema, hasHreflang, hasSitemap,
@@ -285,8 +287,8 @@ export async function fetchPageSignals(targetUrl: string, emit?: EmitFn): Promis
     const hasIndexNow = /indexnow/i.test(html)
 
     // AI 크롤러 접근 상태
-    const oaiSearchBotStatus = interpretBotAccess(robotsTxt, 'oai-searchbot')
-    const gptBotStatus       = interpretBotAccess(robotsTxt, 'gptbot')
+    const oaiSearchBotStatus = pageBotAccess(signals, 'oai-searchbot')
+    const gptBotStatus       = pageBotAccess(signals, 'gptbot')
 
     // ── 점수 계산 ─────────────────────────────────────────────────────────────
     type ScoreEntry = { label: string; earned: number; max: number; pass: boolean }
@@ -377,12 +379,16 @@ function interpretBotAccess(rb: string, botName: string): BotAccessState {
   return interpretRobotsAccess(rb, botName)
 }
 
+function pageBotAccess(s: PageSignals, botName: string): BotAccessState {
+  const state = interpretBotAccess(s.robotsTxt.toLowerCase(), botName)
+  return state === 'unknown' && s.robotsTxtStatus === 'not_found' ? 'allowed_by_general_rule' : state
+}
+
 // ─── 검색 자격 게이트 (Block 4) ──────────────────────────────────────────────
 
 export function calcSearchEligibility(s: PageSignals): SearchEligibilityResult {
-  const rb = s.robotsTxt.toLowerCase()
   const noindex = s.metaRobots.toLowerCase().includes('noindex')
-  const generalAccess = interpretBotAccess(rb, '*')
+  const generalAccess = pageBotAccess(s, '*')
   const httpOk = s.statusCode >= 200 && s.statusCode < 400
 
   const checks: SearchEligibilityResult['checks'] = [
@@ -395,8 +401,8 @@ export function calcSearchEligibility(s: PageSignals): SearchEligibilityResult {
     {
       id: 'robots_access',
       label: 'robots.txt 크롤링',
-      status: !s.robotsTxt ? 'unknown' : generalAccess === 'explicitly_blocked' ? 'fail' : 'pass',
-      detail: !s.robotsTxt ? '확인 불가' : generalAccess === 'explicitly_blocked' ? '루트 전체 차단 규칙' : '공개 경로 수집 가능',
+      status: s.robotsTxtStatus === 'unavailable' ? 'unknown' : generalAccess === 'explicitly_blocked' ? 'fail' : 'pass',
+      detail: s.robotsTxtStatus === 'unavailable' ? '응답 확인 불가' : s.robotsTxtStatus === 'not_found' ? 'robots.txt 없음 — 기본 수집 허용' : generalAccess === 'explicitly_blocked' ? '루트 전체 차단 규칙' : '공개 경로 수집 가능',
     },
     {
       id: 'noindex',
@@ -432,7 +438,7 @@ export function calcSearchEligibility(s: PageSignals): SearchEligibilityResult {
 export function calcMeasurementConfidence(s: PageSignals): MeasurementConfidence {
   let score = 0
   if (!s.fetchError && s.statusCode === 200) score += 2
-  if (s.robotsTxt) score += 1
+  if (s.robotsTxtStatus !== 'unavailable') score += 1
   if (s.hasSitemap) score += 1
   if (s.wordCount > 100) score += 1
   if (s.hasSchema) score += 1
@@ -443,8 +449,7 @@ export function calcMeasurementConfidence(s: PageSignals): MeasurementConfidence
 // ─── AI Citation Readiness 추정 (Block 3 - 정적 분석 기반) ───────────────────
 
 export function calcAiCitationReadiness(s: PageSignals): number {
-  const rb = s.robotsTxt.toLowerCase()
-  const oaiState = interpretBotAccess(rb, 'oai-searchbot')
+  const oaiState = pageBotAccess(s, 'oai-searchbot')
   if (oaiState === 'explicitly_blocked') return 0
 
   const accessScore = oaiState === 'unknown' ? 0 : 100
@@ -503,20 +508,16 @@ export function calcCategoryScore(s: PageSignals): CategoryScores {
   if (s.isHttps)                                              tech += 10
   if (s.statusCode === 200)                                   tech += 15
   if (!s.metaRobots.toLowerCase().includes('noindex'))        tech += 15
-  if (s.title && s.title.length <= 70)                         tech += 15
-  else if (s.title)                                           tech += 7
+  if (s.title)                                                tech += 15
   if (s.metaDescription)                                      tech += 10
   if (s.canonical)                                            tech += 10
-  if (s.h1s.length === 1)                                     tech += 10
-  else if (s.h1s.length > 0)                                  tech += 4
+  if (s.h1s.length > 0)                                       tech += 10
   if (s.hasViewport)                                          tech += 8
   if (s.responseTime < 3000)                                  tech += 7
   else if (s.responseTime < 6000)                             tech += 3
 
-  const rb = s.robotsTxt.toLowerCase()
-
   // ChatGPT Search — 미명시는 allowed_by_general_rule로 해석 (Block 3)
-  const oaiState = interpretBotAccess(rb, 'oai-searchbot')
+  const oaiState = pageBotAccess(s, 'oai-searchbot')
   let chatgpt = 0
   chatgpt += oaiState === 'explicitly_blocked' ? 0 : oaiState === 'unknown' ? 0 : 45
   if (s.title && s.metaDescription)                            chatgpt += 20
@@ -551,21 +552,19 @@ export function calcCategoryScore(s: PageSignals): CategoryScores {
   if (s.hasSchema)                                            geo += 15
   if (schemaContent.includes('sameas'))                       geo += 15
 
-  const bingState = interpretBotAccess(rb, 'bingbot')
+  const bingState = pageBotAccess(s, 'bingbot')
   let bing = 0
   if (bingState !== 'explicitly_blocked' && bingState !== 'unknown') bing += 35
   if (s.hasSitemap)                                            bing += 30
   if (!s.metaRobots.toLowerCase().includes('noindex'))         bing += 20
   if (s.canonical)                                             bing += 15
 
-  const yetiState = interpretBotAccess(rb, 'yeti')
+  const yetiState = pageBotAccess(s, 'yeti')
   let naver = 0
   if (yetiState !== 'explicitly_blocked' && yetiState !== 'unknown') naver += 30
   if (!s.metaRobots.toLowerCase().includes('noindex'))         naver += 20
-  if (s.title && s.title.length <= 40)                         naver += 15
-  else if (s.title)                                            naver += 7
-  if (s.metaDescription && s.metaDescription.length <= 80)     naver += 15
-  else if (s.metaDescription)                                  naver += 7
+  if (s.title)                                                 naver += 15
+  if (s.metaDescription)                                       naver += 15
   if (s.hasSitemap)                                            naver += 10
   if (s.canonical)                                             naver += 10
 
@@ -577,7 +576,7 @@ export function calcCategoryScore(s: PageSignals): CategoryScores {
     : 0
   const technicalStructure = Math.min(100,
     (s.statusCode === 200 ? 15 : 0) + (s.isHttps ? 10 : 0) + (!s.metaRobots.toLowerCase().includes('noindex') ? 15 : 0) +
-    (s.canonical ? 10 : 0) + (s.h1s.length === 1 ? 10 : s.h1s.length > 0 ? 4 : 0) + (s.hasViewport ? 8 : 0) +
+    (s.canonical ? 10 : 0) + (s.h1s.length > 0 ? 10 : 0) + (s.hasViewport ? 8 : 0) +
     (s.title ? 8 : 0) + (s.metaDescription ? 6 : 0) + (s.internalLinks > 0 ? 5 : 0) +
     (s.hasSchema && s.schemaParseValid ? 8 : s.hasSchema ? 2 : 0) + (s.responseTime < 3000 ? 5 : s.responseTime < 6000 ? 2 : 0)
   )
@@ -587,7 +586,7 @@ export function calcCategoryScore(s: PageSignals): CategoryScores {
   const hasAuthorSignal = s.hasAuthorSignal ?? false
   const hasDateSignal = s.hasDateSignal ?? false
   const contentExtractability = Math.min(100,
-    (s.h1s.length === 1 ? 15 : 0) + (s.h2s.length > 0 ? 15 : 0) + (s.h3s.length > 0 ? 8 : 0) +
+    (s.h1s.length > 0 ? 15 : 0) + (s.h2s.length > 0 ? 15 : 0) + (s.h3s.length > 0 ? 8 : 0) +
     Math.min(18, questionHeadingCount * 6) + (s.wordCount >= 400 ? 18 : s.wordCount >= 200 ? 12 : s.wordCount >= 80 ? 6 : 0) +
     (s.title && s.metaDescription ? 10 : 0) + (s.internalLinks >= 3 ? 8 : s.internalLinks > 0 ? 4 : 0) +
     (s.imageCount === 0 || s.imagesWithAlt / s.imageCount >= 0.8 ? 8 : 3)
@@ -670,35 +669,33 @@ export function calcReadinessIndex(scores: CategoryScores, siteHealthScore?: num
 export function generateRuleBasedResult(signals: PageSignals, scores: CategoryScores): Record<string, unknown> {
   const overall = calcReadinessIndex(scores)
   const domain = signals.url.replace(/^https?:\/\//, '').split('/')[0]
-  const rb = signals.robotsTxt.toLowerCase()
-
   const criteria: CriteriaItem[] = []
 
   // ── Technical ──────────────────────────────────────────────────────────────
   {
     const tLen = signals.title.length
-    const tOk = tLen >= 30 && tLen <= 60
-    const tWarn = tLen > 0
+    const tExists = tLen > 0
+    const tExtreme = tLen > 120 || (tLen > 0 && tLen < 5)
     const titleSnippet = tLen === 0
       ? `<!-- HTML <head> 안에 추가 -->\n<title>핵심 키워드 | ${domain}</title>`
-      : tLen > 60
-      ? `<!-- 현재 Title 단축 필요 (${tLen}자 → 60자 이내) -->\n<title>${signals.title.slice(0, 55)}…</title>`
+      : tExtreme
+      ? `<!-- 고정 글자 수가 아니라 의미와 반복 표현을 검토하세요 -->\n<title>페이지의 핵심 주제 | 브랜드명</title>`
       : null
     criteria.push({
       id: 'tech_title', name: 'Title 태그 최적화', category: 'technical',
-      score: tOk ? 90 : tWarn ? 60 : 10,
-      status: tOk ? 'pass' : tWarn ? 'warning' : 'fail',
+      score: !tExists ? 10 : tExtreme ? 70 : 90,
+      status: !tExists ? 'fail' : tExtreme ? 'warning' : 'pass',
       weight: '높음',
-      scoringBasis: `실측: Title="${signals.title.slice(0, 60)}${signals.title.length > 60 ? '...' : ''}" (${tLen}자). Google 권장 30-60자 ${tOk ? '충족' : tLen === 0 ? '없음 — 심각한 SEO 손실' : tLen < 30 ? '너무 짧음' : '초과 — 검색결과에서 잘림'}.`,
-      evaluationCriteria: 'Google: Title은 30-60자, 핵심 키워드 포함, 브랜드명 포함 권장',
-      currentState: tLen === 0 ? 'Title 태그 없음' : `${tLen}자 (${tOk ? '적절' : tLen < 30 ? '짧음' : '김'})`,
+      scoringBasis: `실측: Title="${signals.title.slice(0, 60)}${signals.title.length > 60 ? '...' : ''}" (${tLen}자). Google은 고정 글자 수가 아니라 페이지별 고유성·명확성·간결성을 권장하며 기기 폭에 따라 표시를 자릅니다.`,
+      evaluationCriteria: 'Google 공식 기준: 페이지마다 고유하고 명확하며 간결한 Title을 제공하고 반복·키워드 나열을 피함',
+      currentState: tLen === 0 ? 'Title 태그 없음' : `${tLen}자 · 존재 확인 (고유성은 사이트 전체 진단에서 별도 검사)`,
       improvement: tLen === 0
-        ? '① HTML <head> 태그 안에 <title> 추가\n② 형식: "핵심 키워드 | 브랜드명" (30-60자)\n③ 저장 후 Google Search Console에서 색인 요청'
-        : tLen > 60
-        ? `① 현재 ${tLen}자 → 60자 이내로 단축\n② 핵심 키워드를 앞쪽에 배치\n③ 브랜드명은 " | 브랜드명" 형식으로 뒤에`
-        : '현재 적절. 핵심 키워드가 앞부분에 오도록 유지',
-      priority: tLen === 0 ? 'critical' : tOk ? 'low' : 'high',
-      estimatedScoreGain: tLen === 0 ? 15 : tOk ? 0 : 8,
+        ? '① HTML <head> 태그 안에 페이지 내용을 정확히 설명하는 <title> 추가\n② 페이지마다 고유하게 작성\n③ 저장 후 Search Console에서 재수집 확인'
+        : tExtreme
+        ? '페이지 주제와 브랜드를 유지하면서 반복·불필요한 문구를 제거하고 실제 검색결과 표시를 확인하세요.'
+        : '존재 기준 충족. 사이트 전체 중복 여부와 검색 의도 일치 여부를 함께 확인하세요.',
+      priority: tLen === 0 ? 'critical' : tExtreme ? 'medium' : 'low',
+      estimatedScoreGain: tLen === 0 ? 15 : tExtreme ? 3 : 0,
       referenceGuide: 'Google Search Essentials: https://developers.google.com/search/docs/essentials',
       codeSnippet: titleSnippet ?? undefined,
       codeType: 'html' as const,
@@ -706,24 +703,25 @@ export function generateRuleBasedResult(signals: PageSignals, scores: CategorySc
   }
   {
     const mLen = signals.metaDescription.length
-    const mOk = mLen >= 80 && mLen <= 160
+    const mExists = mLen > 0
+    const mExtreme = mLen > 320
     criteria.push({
       id: 'tech_meta', name: 'Meta Description', category: 'technical',
-      score: mOk ? 90 : mLen > 0 ? 55 : 10,
-      status: mOk ? 'pass' : mLen > 0 ? 'warning' : 'fail',
+      score: !mExists ? 20 : mExtreme ? 70 : 90,
+      status: !mExists ? 'warning' : mExtreme ? 'warning' : 'pass',
       weight: '높음',
-      scoringBasis: `실측: Meta Description ${mLen}자. Google 권장 80-160자 ${mOk ? '충족' : mLen === 0 ? '없음 — Google이 임의 생성' : mLen < 80 ? '부족' : '초과'}.`,
-      evaluationCriteria: 'Google: Meta Description 80-160자, 클릭 유도 문구 포함',
+      scoringBasis: `실측: Meta Description ${mLen}자. Google은 고정 글자 수를 규정하지 않으며, 검색어에 따라 본문 또는 설명 태그에서 스니펫을 자동 생성할 수 있습니다.`,
+      evaluationCriteria: 'Google 공식 기준: 페이지 내용을 정확하고 고유하게 요약하는 설명 제공. 고정 글자 수는 공식 점수 기준이 아님',
       currentState: mLen === 0 ? 'Meta Description 없음' : `${mLen}자`,
       improvement: mLen === 0
-        ? '① HTML <head> 안에 meta description 추가\n② 핵심 서비스 설명 + 행동 유도 문구 포함\n③ 80-160자 유지 (너무 길면 검색결과에서 잘림)'
-        : mOk
-        ? '현재 적절. 클릭률 높이는 행동 촉구 문구(CTA) 포함 여부 점검'
-        : `① 현재 ${mLen}자 → ${mLen < 80 ? '80자 이상으로 내용 추가' : '160자 이내로 단축'}\n② 브랜드 강점 + "지금 바로", "무료 체험" 등 CTA 포함`,
-      priority: mLen === 0 ? 'critical' : mOk ? 'low' : 'medium',
-      estimatedScoreGain: mLen === 0 ? 12 : mOk ? 0 : 5,
+        ? 'HTML <head>에 페이지 내용을 정확하고 고유하게 요약하는 meta description을 추가하세요.'
+        : mExtreme
+        ? '반복 문구를 제거하고 검색 사용자가 페이지 내용을 판단할 수 있는 핵심 정보만 남기세요.'
+        : '존재 기준 충족. 사이트 전체 중복 여부와 실제 검색결과 스니펫을 확인하세요.',
+      priority: mLen === 0 ? 'high' : mExtreme ? 'medium' : 'low',
+      estimatedScoreGain: mLen === 0 ? 8 : mExtreme ? 3 : 0,
       referenceGuide: 'Google Search Essentials: https://developers.google.com/search/docs/essentials',
-      codeSnippet: !mOk ? `<!-- HTML <head> 안에 추가 -->\n<meta name="description" content="${domain}의 핵심 서비스 한 줄 소개. 구체적 강점과 행동 유도 문구 포함. (80-160자)">` : undefined,
+      codeSnippet: !mExists ? `<!-- HTML <head> 안에 추가 -->\n<meta name="description" content="${domain} 페이지의 대상, 핵심 제공 가치와 차별점을 정확하게 요약">` : undefined,
       codeType: 'html' as const,
     })
   }
@@ -731,21 +729,19 @@ export function generateRuleBasedResult(signals: PageSignals, scores: CategorySc
     const h1c = signals.h1s.length
     criteria.push({
       id: 'tech_h1', name: 'H1 태그 구조', category: 'technical',
-      score: h1c === 1 ? 90 : h1c === 0 ? 15 : 50,
-      status: h1c === 1 ? 'pass' : h1c === 0 ? 'fail' : 'warning',
+      score: h1c > 0 ? 90 : 40,
+      status: h1c > 0 ? 'pass' : 'warning',
       weight: '높음',
-      scoringBasis: `실측: H1 ${h1c}개 발견. ${h1c === 0 ? '없음 — 페이지 주제 불명확' : h1c === 1 ? `"${signals.h1s[0]?.slice(0, 50)}" — 권장 구조` : `복수 H1 SEO 비권장`}.`,
-      evaluationCriteria: 'Google: 페이지당 H1 1개, 핵심 키워드 포함, 콘텐츠 계층 명확화',
-      currentState: h1c === 0 ? 'H1 없음' : h1c === 1 ? `H1: "${signals.h1s[0]?.slice(0, 40)}"` : `H1 ${h1c}개 (중복)`,
+      scoringBasis: `실측: H1 ${h1c}개 발견. Google은 H1 개수를 고정 규칙으로 두지 않으며, 사용자와 검색엔진이 주 제목을 분명히 식별할 수 있는지가 핵심입니다.`,
+      evaluationCriteria: 'Google 공식 취지: 시각적 주 제목과 heading 구조가 페이지의 핵심 주제를 명확하게 전달해야 함',
+      currentState: h1c === 0 ? 'H1 없음' : h1c === 1 ? `H1: "${signals.h1s[0]?.slice(0, 40)}"` : `H1 ${h1c}개 · 의미 구조 수동 검토 필요`,
       improvement: h1c === 0
-        ? '① 페이지 메인 제목을 <h1> 태그로 감싸기\n② 핵심 키워드를 자연스럽게 포함\n③ 페이지 전체에서 H1은 반드시 1개만'
-        : h1c === 1
-        ? '현재 이상적. 핵심 키워드 포함 여부 점검'
-        : '① H1 태그 중 1개만 남기고 나머지는 H2로 변경\n② 가장 중요한 제목만 H1 유지',
-      priority: h1c === 0 ? 'critical' : h1c === 1 ? 'low' : 'medium',
-      estimatedScoreGain: h1c === 0 ? 12 : h1c === 1 ? 0 : 6,
+        ? '페이지의 시각적 주 제목을 의미에 맞는 H1으로 표시하고 하위 주제를 H2·H3로 구성하세요.'
+        : '주 제목이 명확한지, 여러 H1이 서로 다른 최상위 섹션을 의미하는지 사람이 검토하세요.',
+      priority: h1c === 0 ? 'medium' : 'low',
+      estimatedScoreGain: h1c === 0 ? 5 : 0,
       referenceGuide: 'Google SEO Starter Guide: https://developers.google.com/search/docs/fundamentals/seo-starter-guide',
-      codeSnippet: h1c !== 1 ? `<!-- 페이지 본문 최상단에 추가 -->\n<h1>핵심 키워드가 담긴 메인 제목</h1>\n\n<!-- 하위 섹션은 H2, H3 사용 -->\n<h2>주요 서비스 1</h2>\n<h2>주요 서비스 2</h2>` : undefined,
+      codeSnippet: h1c === 0 ? `<!-- 실제 화면의 주 제목에 적용 -->\n<h1>페이지의 핵심 주제를 정확히 설명하는 제목</h1>\n<h2>첫 번째 하위 주제</h2>` : undefined,
       codeType: 'html' as const,
     })
   }
@@ -773,8 +769,8 @@ export function generateRuleBasedResult(signals: PageSignals, scores: CategorySc
   // ── ChatGPT Search ─────────────────────────────────────────────────────────
   {
     // Block 3: 미명시 ≠ 차단. robots 전체 규칙을 해석해 실제 허용 상태 판정
-    const oaiState = interpretBotAccess(rb, 'oai-searchbot')
-    const gptState = interpretBotAccess(rb, 'gptbot')
+    const oaiState = pageBotAccess(signals, 'oai-searchbot')
+    const gptState = pageBotAccess(signals, 'gptbot')
     const oaiOk = oaiState !== 'explicitly_blocked'
     const oaiExplicit = oaiState === 'explicitly_allowed'
     const gptOk = gptState !== 'explicitly_blocked'
@@ -977,27 +973,27 @@ export function generateRuleBasedResult(signals: PageSignals, scores: CategorySc
   // ── Schema.org ─────────────────────────────────────────────────────────────
   {
     const schemaContent = signals.jsonLdRaw.join(' ').toLowerCase()
-    const hasFaq = schemaContent.includes('faqpage') || schemaContent.includes('howto')
+    const hasHomepageType = schemaContent.includes('organization') || schemaContent.includes('website')
+    const schemaValid = signals.hasSchema && signals.schemaParseValid
     criteria.push({
       id: 'schema_jsonld', name: 'JSON-LD 구조화 데이터', category: 'schema',
-      score: signals.hasSchema ? (hasFaq ? 90 : schemaContent.includes('@graph') ? 80 : 65) : 10,
-      status: signals.hasSchema ? 'pass' : 'fail',
+      score: !signals.hasSchema ? 20 : !schemaValid ? 25 : hasHomepageType ? 90 : 70,
+      status: !signals.hasSchema ? 'warning' : !schemaValid ? 'fail' : 'pass',
       weight: '높음',
-      scoringBasis: `실측: JSON-LD ${signals.jsonLdRaw.length}개 발견. ${signals.hasSchema ? `포함 타입 확인됨` : '구조화 데이터 없음 — AI 검색엔진 이해도 저하'}`,
-      evaluationCriteria: 'Schema.org: Organization, WebPage, FAQ, BreadcrumbList 권장',
+      scoringBasis: `실측: JSON-LD ${signals.jsonLdRaw.length}개 · JSON 파싱 ${schemaValid ? '성공' : signals.hasSchema ? '오류' : '해당 없음'} · 홈페이지 유형 ${hasHomepageType ? '확인' : '미확인'}.`,
+      evaluationCriteria: 'Google·네이버 공식 취지: 화면의 실제 콘텐츠와 일치하는 유효한 구조화 데이터 및 페이지에 적합한 유형 사용',
       currentState: signals.hasSchema ? `JSON-LD ${signals.jsonLdRaw.length}개` : '구조화 데이터 없음',
       improvement: !signals.hasSchema
         ? '① HTML <head> 끝부분에 JSON-LD 스크립트 추가\n② 오른쪽 코드를 복사해서 붙여넣기\n③ "name", "url" 부분을 실제 정보로 수정\n④ Google Rich Results Test(search.google.com/test/rich-results)에서 검증'
-        : hasFaq
-        ? '현재 우수. SpeakableSpecification 추가 고려'
-        : '① 기존 JSON-LD에 FAQPage 스키마 추가\n② AI 검색엔진이 Q&A를 직접 인용 가능해짐',
-      priority: signals.hasSchema ? 'medium' : 'critical',
-      estimatedScoreGain: signals.hasSchema ? (hasFaq ? 0 : 15) : 35,
+        : !schemaValid
+        ? 'JSON 문법 오류를 먼저 수정한 뒤 Schema Markup Validator와 검색엔진 테스트 도구로 재검증하세요.'
+        : '구조화 데이터가 화면 내용과 일치하는지, 홈페이지에는 Organization·WebSite 유형이 적합한지 검토하세요.',
+      priority: !signals.hasSchema || !schemaValid ? 'high' : 'low',
+      estimatedScoreGain: !signals.hasSchema ? 15 : !schemaValid ? 12 : 0,
       referenceGuide: 'Schema.org: https://schema.org/ | Google Rich Results: https://search.google.com/test/rich-results',
       codeSnippet: !signals.hasSchema
-        ? `<!-- HTML <head> 끝부분에 추가 -->\n<script type="application/ld+json">\n{\n  "@context": "https://schema.org",\n  "@type": "Organization",\n  "name": "${signals.title || domain}",\n  "url": "https://${domain}",\n  "logo": "https://${domain}/logo.png",\n  "description": "회사/서비스 설명",\n  "sameAs": [\n    "https://www.linkedin.com/company/회사명",\n    "https://namu.wiki/w/회사명"\n  ]\n}\n</script>`
-        : hasFaq ? undefined
-        : `<!-- 기존 JSON-LD 옆에 추가 -->\n<script type="application/ld+json">\n{\n  "@context": "https://schema.org",\n  "@type": "FAQPage",\n  "mainEntity": [\n    {\n      "@type": "Question",\n      "name": "자주 묻는 질문 1?",\n      "acceptedAnswer": {\n        "@type": "Answer",\n        "text": "답변 내용"\n      }\n    }\n  ]\n}\n</script>`,
+        ? `<!-- 실제 정보로 바꾸고 검증 후 적용 -->\n<script type="application/ld+json">\n{\n  "@context": "https://schema.org",\n  "@type": "Organization",\n  "name": "${signals.title || domain}",\n  "url": "https://${domain}",\n  "logo": "https://${domain}/logo.png",\n  "description": "화면에 표시되는 실제 회사 설명",\n  "sameAs": ["https://www.linkedin.com/company/실제-공식-계정"]\n}\n</script>`
+        : undefined,
       codeType: 'json' as const,
     })
   }
@@ -1008,17 +1004,17 @@ export function generateRuleBasedResult(signals: PageSignals, scores: CategorySc
       score: hasSameAs ? 90 : signals.hasSchema ? 40 : 10,
       status: hasSameAs ? 'pass' : 'warning',
       weight: '중간',
-      scoringBasis: `실측: SameAs 속성 ${hasSameAs ? '있음 — Knowledge Graph 연결됨' : '없음 — 브랜드 엔티티 미연결'}.`,
-      evaluationCriteria: 'Schema.org Organization: sameAs로 위키피디아, SNS, 공식 프로필 연결',
+      scoringBasis: `실측: sameAs 속성 ${hasSameAs ? '있음' : '없음'}. URL의 소유권과 동일 조직 여부는 자동 확정하지 않습니다.`,
+      evaluationCriteria: 'Schema.org Organization: 동일 조직임을 확인할 수 있는 실제 공식 프로필만 sameAs로 연결',
       currentState: `SameAs: ${hasSameAs ? '있음 ✅' : '없음'}`,
       improvement: hasSameAs
-        ? 'LinkedIn, 위키피디아, 공식 SNS 모두 포함 여부 점검'
-        : '① Organization 스키마의 sameAs 배열에 공식 프로필 URL 추가\n② LinkedIn, 나무위키/위키피디아, 유튜브, 공식 SNS\n③ AI 검색엔진이 브랜드를 Knowledge Graph와 연결해 신뢰도 향상',
+        ? '각 URL이 실제로 같은 조직의 공식 프로필인지 수동 검증하세요.'
+        : '① 실제 소유한 공식 프로필만 추가\n② 존재하지 않거나 관계없는 프로필은 입력하지 않음\n③ Schema Validator로 문법 검증',
       priority: hasSameAs ? 'low' : 'high',
       estimatedScoreGain: hasSameAs ? 0 : 20,
       referenceGuide: 'Schema.org sameAs: https://schema.org/sameAs',
       codeSnippet: !hasSameAs
-        ? `<!-- Organization JSON-LD의 sameAs 항목 추가/수정 -->\n{\n  "@context": "https://schema.org",\n  "@type": "Organization",\n  "name": "${signals.title || domain}",\n  "url": "https://${domain}",\n  "sameAs": [\n    "https://www.linkedin.com/company/회사명",\n    "https://namu.wiki/w/회사명",\n    "https://www.youtube.com/@채널명",\n    "https://twitter.com/계정명"\n  ]\n}`
+        ? `<!-- 실제 소유한 공식 URL만 입력 -->\n{\n  "@context": "https://schema.org",\n  "@type": "Organization",\n  "name": "${signals.title || domain}",\n  "url": "https://${domain}",\n  "sameAs": [\n    "https://www.linkedin.com/company/실제-공식-계정",\n    "https://www.youtube.com/@실제-공식-채널"\n  ]\n}`
         : undefined,
       codeType: 'json' as const,
     })
@@ -1047,7 +1043,7 @@ export function generateRuleBasedResult(signals: PageSignals, scores: CategorySc
     })
   }
   {
-    const bingState = interpretBotAccess(rb, 'bingbot')
+    const bingState = pageBotAccess(signals, 'bingbot')
     const bingOk = bingState !== 'explicitly_blocked'
     criteria.push({
       id: 'bing_bot', name: 'Bingbot 크롤 접근', category: 'bing',
@@ -1072,7 +1068,7 @@ export function generateRuleBasedResult(signals: PageSignals, scores: CategorySc
 
   // ── Naver Search readiness ────────────────────────────────────────────────
   {
-    const yetiState = interpretBotAccess(rb, 'yeti')
+    const yetiState = pageBotAccess(signals, 'yeti')
     const yetiOk = yetiState !== 'explicitly_blocked' && yetiState !== 'unknown'
     criteria.push({
       id: 'naver_yeti', name: '네이버 Yeti 수집 접근', category: 'naver',
@@ -1091,18 +1087,18 @@ export function generateRuleBasedResult(signals: PageSignals, scores: CategorySc
     })
   }
   {
-    const titleOk = signals.title.length > 0 && signals.title.length <= 40
-    const descOk = signals.metaDescription.length > 0 && signals.metaDescription.length <= 80
+    const titleOk = signals.title.length > 0
+    const descOk = signals.metaDescription.length > 0
     const metaOk = titleOk && descOk
     criteria.push({
-      id: 'naver_meta', name: '네이버 Title·Description 권장 범위', category: 'naver',
+      id: 'naver_meta', name: '네이버 Title·Description 준비', category: 'naver',
       score: (titleOk ? 50 : 0) + (descOk ? 50 : 0),
       status: metaOk ? 'pass' : signals.title && signals.metaDescription ? 'warning' : 'fail',
       weight: '중간',
-      scoringBasis: `Title ${signals.title.length}자, Description ${signals.metaDescription.length}자입니다.`,
-      evaluationCriteria: '네이버 사이트 간단 체크 권장: 제목 40자, 설명 80자 이내.',
-      currentState: `Title ${titleOk ? '권장 범위' : '조정 필요'} · Description ${descOk ? '권장 범위' : '조정 필요'}`,
-      improvement: '페이지 주제를 정확히 유지하면서 Title은 40자, Description은 80자 이내의 고유 문구로 작성하세요.',
+      scoringBasis: `Title ${signals.title.length}자, Description ${signals.metaDescription.length}자입니다. 존재 여부만 점수화하고 길이는 표시 참고값으로 제공합니다.`,
+      evaluationCriteria: '네이버 공식 취지: 페이지 주제를 정확히 설명하는 고유한 제목과 설명 제공',
+      currentState: `Title ${titleOk ? '있음' : '없음'} · Description ${descOk ? '있음' : '없음'}`,
+      improvement: '누락된 태그를 추가하고 페이지마다 실제 내용을 정확하게 설명하는 고유 문구를 작성하세요. 글자 수만 맞추기 위한 문장 확장은 피하세요.',
       priority: metaOk ? 'low' : 'medium',
       estimatedScoreGain: 0,
       referenceGuide: 'Naver Search Advisor: https://searchadvisor.naver.com/guide/diagnose-site',

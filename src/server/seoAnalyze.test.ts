@@ -36,6 +36,7 @@ function signals(overrides: Partial<PageSignals> = {}): PageSignals {
     imageCount: 0,
     imagesWithAlt: 0,
     robotsTxt: 'User-agent: *\nAllow: /',
+    robotsTxtStatus: 'found',
     hasGA4: false,
     ga4MeasurementId: '',
     hasGTM: false,
@@ -75,6 +76,14 @@ describe('v0.6 scoring invariants', () => {
     const score = calcCategoryScore(signals({ metaRobots: 'noindex,nofollow' }))
     expect(score.searchEligibility.status).toBe('fail')
     expect(calcReadinessIndex(score, 100)).toBeLessThanOrEqual(25)
+  })
+
+  it('treats a confirmed missing robots.txt as default allow, not a bot block', () => {
+    const absent = calcCategoryScore(signals({ robotsTxt: '', robotsTxtStatus: 'not_found' }))
+    const unavailable = calcCategoryScore(signals({ robotsTxt: '', robotsTxtStatus: 'unavailable' }))
+    expect(absent.searchEligibility.status).toBe('pass')
+    expect(absent.diagnosticScores.platformAccessibility).toBe(100)
+    expect(unavailable.diagnosticScores.platformAccessibility).toBe(0)
   })
 
   it('scores a measurable, structured page above a thin unsupported page', () => {

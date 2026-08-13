@@ -141,7 +141,7 @@ export function ReadinessOverview({ audit, mode }: Props) {
         {topIssue && <button onClick={goToAction}>해결 방법 보기 <ArrowRight size={15} /></button>}
       </div>
 
-      <div className="v03-disclaimer"><Info size={14} /> {config.title} 점수는 확인 가능한 HTML·HTTP·robots.txt·구조화 데이터 기반의 자체 준비도 지수입니다. 검색 순위·노출·AI 인용을 보장하지 않으며, 확인 불가 항목은 점수에서 제외합니다. 점수 모델 {audit.scoreModelVersion ?? 'v1.0-r2'}.</div>
+      <div className="v03-disclaimer"><Info size={14} /> {config.title} 점수는 확인 가능한 HTML·HTTP·robots.txt·구조화 데이터 기반의 자체 준비도 지수입니다. 검색 순위·노출·AI 인용을 보장하지 않으며, 확인 불가 항목은 점수에서 제외합니다. 점수 모델 {audit.scoreModelVersion ?? 'v1.0-r3'}.</div>
     </section>
   )
 }

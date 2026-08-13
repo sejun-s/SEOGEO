@@ -257,6 +257,7 @@ export interface PageSignals {
   twitterCard: string
   jsonLdRaw: string[]
   robotsTxt: string
+  robotsTxtStatus: 'found' | 'not_found' | 'unavailable'
   hasViewport: boolean
   hasCharset: boolean
   wordCount: number

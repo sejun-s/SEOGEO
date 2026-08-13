@@ -212,7 +212,7 @@ const SCORE_RULES = new Map<string, { maxPenalty: number; verification: string }
   ['redirect', { maxPenalty: 8, verification: '내부 링크가 리다이렉트 없이 최종 URL로 연결되는지 확인' }],
   ['missing_description', { maxPenalty: 8, verification: 'HTML meta[name="description"] 존재 여부 확인' }],
   ['duplicate_description', { maxPenalty: 5, verification: '영향 URL의 meta description 값을 서로 비교' }],
-  ['invalid_h1', { maxPenalty: 8, verification: '렌더링된 페이지에 대표 H1이 하나인지 확인' }],
+  ['invalid_h1', { maxPenalty: 5, verification: '렌더링된 페이지에 의미 있는 주 제목이 있는지 확인' }],
   ['missing_canonical', { maxPenalty: 6, verification: 'HTML link[rel="canonical"] 존재 여부 확인' }],
   ['slow_response', { maxPenalty: 5, verification: '동일 URL을 재측정하고 PageSpeed Insights로 교차 확인' }],
 ])
@@ -239,7 +239,7 @@ function buildIssues(pages: CrawlPageResult[]): SiteCrawlIssue[] {
   addIssue('redirect', 'warning', '리다이렉트를 거친 페이지', pages.filter(page => page.redirected), '내부 링크가 최종 URL을 직접 가리키도록 수정하세요.')
   addIssue('missing_title', 'error', 'Title이 없는 페이지', pages.filter(page => page.statusCode === 200 && !page.title), '페이지 목적을 설명하는 고유한 Title을 작성하세요.')
   addIssue('missing_description', 'warning', 'Meta Description이 없는 페이지', pages.filter(page => page.statusCode === 200 && !page.metaDescription), '검색 결과에서 클릭을 유도할 수 있는 설명을 작성하세요.')
-  addIssue('invalid_h1', 'warning', 'H1이 없거나 여러 개인 페이지', pages.filter(page => page.statusCode === 200 && page.h1Count !== 1), '페이지의 대표 제목을 H1 하나로 명확하게 표시하세요.')
+  addIssue('invalid_h1', 'warning', 'H1 주 제목이 없는 페이지', pages.filter(page => page.statusCode === 200 && page.h1Count === 0), '페이지의 시각적 주 제목을 의미에 맞는 H1으로 표시하세요.')
   addIssue('missing_canonical', 'warning', 'Canonical이 없는 페이지', pages.filter(page => page.statusCode === 200 && !page.canonical), '각 페이지에 대표 URL을 가리키는 canonical 태그를 추가하세요.')
   addIssue('noindex', 'notice', 'noindex가 설정된 페이지', pages.filter(page => page.noindex), '의도적으로 검색에서 제외한 페이지인지 확인하세요.')
   addIssue('slow_response', 'warning', '응답이 3초 이상인 페이지', pages.filter(page => page.responseTime >= 3000), '서버 응답, 캐시, 이미지와 외부 스크립트를 점검하세요.')
@@ -362,8 +362,15 @@ export async function crawlSite(targetUrl: string, inputOptions: SiteCrawlerOpti
     && page.statusCode < 300
     && Boolean(page.title)
     && !duplicateTitles.has(page.url)
-  const errorCount = issues.filter(issue => issue.severity === 'error').reduce((sum, issue) => sum + issue.count, 0)
-  const warningCount = issues.filter(issue => issue.severity === 'warning').reduce((sum, issue) => sum + issue.count, 0)
+  const errorCount = pages.filter(page =>
+    page.statusCode === 0 || page.statusCode >= 400 ||
+    (page.statusCode === 200 && !page.title) || duplicateTitles.has(page.url),
+  ).length
+  const warningCount = pages.filter(page =>
+    page.redirected ||
+    (page.statusCode === 200 && (!page.metaDescription || page.h1Count === 0 || !page.canonical)) ||
+    page.responseTime >= 3000,
+  ).length
   const scoreResult = calculateHealthScore(pages, issues)
 
   return {
@@ -376,7 +383,7 @@ export async function crawlSite(targetUrl: string, inputOptions: SiteCrawlerOpti
     errorCount,
     warningCount,
     healthScore: scoreResult.score,
-    scoreModelVersion: 'site-health-v0.2.0',
+    scoreModelVersion: 'site-health-v0.3.0',
     scoreFactors: scoreResult.factors,
     truncated: queue.length > 0 || Date.now() >= deadline,
     blockedByRobots,
