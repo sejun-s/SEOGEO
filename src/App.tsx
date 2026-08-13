@@ -22,6 +22,7 @@ import { MobileNav } from './components/MobileNav';
 import { ReportActions } from './components/ReportActions';
 import { ShopifyPanel } from './components/ShopifyPanel';
 import { NaverReadinessPanel } from './components/NaverReadinessPanel';
+import { GeoMonitoringDashboard } from './components/GeoMonitoringDashboard';
 
 const HISTORY_KEY = 'seo-analyzer-history';
 
@@ -444,7 +445,12 @@ export function App() {
             <div className="v03-progress-overlay"><AnalysisProgress events={analysisEvents} /></div>
           )}
 
-          {showCompare && compareUrls.length >= 2 ? (
+          {/* GEO 모니터링 — 분석 기록과 무관하게 독립 표시 */}
+          {topTab === 'geo-monitoring' ? (
+            <div className="v03-content max-w-7xl mx-auto w-full px-4 py-6 sm:px-6 lg:px-8">
+              <GeoMonitoringDashboard />
+            </div>
+          ) : showCompare && compareUrls.length >= 2 ? (
             <div className="max-w-7xl mx-auto w-full px-4 py-6 sm:px-6 lg:px-8">
               <CompareView
                 audits={compareUrls.map(u => history.find(a => a.url === u)).filter(Boolean) as AuditResult[]}
@@ -589,27 +595,7 @@ export function App() {
                   </div>
                 )}
 
-                {/* GEO 모니터링 탭 */}
-                {topTab === 'geo-monitoring' && (
-                  <div className="glass-card p-10 text-center space-y-4 animate-fadeIn">
-                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/20 flex items-center justify-center mx-auto">
-                      <BarChart3 className="w-7 h-7 text-indigo-400" />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-bold text-white mb-1">GEO 모니터링</h3>
-                      <p className="text-sm text-slate-500 max-w-md mx-auto leading-relaxed">
-                        브랜드가 ChatGPT · Perplexity · Google AI Overviews에서 얼마나 자주 언급되는지
-                        주기적으로 추적하는 기능입니다.
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2 justify-center pt-2">
-                      {['브랜드 언급 추이', 'AI 인용 URL 분석', '경쟁사 비교', '주간 리포트'].map(f => (
-                        <span key={f} className="text-[11px] px-3 py-1.5 rounded-full border border-white/10 bg-white/5 text-slate-500">{f}</span>
-                      ))}
-                    </div>
-                    <p className="text-[11px] text-slate-700 pt-2">준비 중 — 곧 출시됩니다</p>
-                  </div>
-                )}
+                {/* GEO 모니터링은 최상단에서 처리 — 여기서는 렌더 없음 */}
 
                 {/* URL 분석 탭 (SEO·GEO 분석 선택 시) */}
                 {topTab === 'seo-geo' && !showCompare && mainTab === 'seo' && (<>

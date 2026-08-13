@@ -85,7 +85,8 @@ export const FixChecklist: React.FC<Props> = ({ audit, onReanalyze, isScanning, 
 
     return [...criteria, ...legacy]
       .sort((a, b) => ({ critical: 0, high: 1, medium: 2, low: 3 }[a.priority] - { critical: 0, high: 1, medium: 2, low: 3 }[b.priority] || b.estimatedScoreGain - a.estimatedScoreGain));
-  }, [audit.criteria, audit.metrics]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audit.criteria, audit.metrics, filterCategories]);
 
   const visibleItems = showAll ? items : items.slice(0, 7);
 

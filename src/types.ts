@@ -364,3 +364,51 @@ export interface SiteCrawlResult {
   issues: SiteCrawlIssue[];
   comparison?: SiteCrawlComparison;
 }
+
+// ─────────────────────────────────────────────────────────────
+// GEO 모니터링 (Module C) — AI 인용률 실측 엔진
+// ─────────────────────────────────────────────────────────────
+
+export type GeoEngine = 'perplexity' | 'chatgpt' | 'claude' | 'gemini';
+
+export type GeoQueryCategory = 'brand' | 'product' | 'industry' | 'competitor';
+
+export interface GeoQuery {
+  id: string;
+  text: string;                   // 질의 원문
+  synonyms: string[];             // 동의어 군집
+  category: GeoQueryCategory;
+  targetAudience?: string;        // 대상 독자
+}
+
+export interface GeoCheckResult {
+  queryId: string;
+  queryText: string;
+  engine: GeoEngine;
+  cited: boolean;                 // 도메인/브랜드 인용 여부
+  mentionCount: number;           // 응답 내 언급 횟수
+  citationSnippet?: string;       // 인용된 전후 문맥 (±100자)
+  competitorMentions: string[];   // 경쟁 도메인 언급 목록
+  responsePreview: string;        // 응답 첫 300자
+  checkedAt: string;              // ISO timestamp
+  error?: string;                 // 엔진 오류 시
+}
+
+export interface GeoMonitoringRun {
+  id: string;
+  targetDomain: string;
+  targetBrand: string;
+  runAt: string;
+  results: GeoCheckResult[];
+  /** 엔진별 인용률 (0~100%) */
+  citationRates: Record<GeoEngine, number>;
+  /** 전체 평균 인용률 */
+  overallCitationRate: number;
+}
+
+export interface GeoMonitoringState {
+  targetDomain: string;
+  targetBrand: string;
+  queries: GeoQuery[];
+  runs: GeoMonitoringRun[];       // 최신순 정렬
+}

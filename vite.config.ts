@@ -7,6 +7,8 @@ import { runAnalysis } from './src/server/seoAnalyze.ts'
 import { analyzeSiteWithGemini } from './src/server/insightAnalyze.ts'
 import { validateAndNormalizeUrl, checkRateLimit, maskApiKey } from './src/server/modules/security/urlSecurity.ts'
 import { adminTelemetry } from './src/server/modules/admin/adminService.ts'
+import { runGeoMonitor, calcCitationRates } from './src/server/geoMonitor.ts'
+import type { GeoEngine, GeoQuery } from './src/types.ts'
 
 export default defineConfig({
   plugins: [
@@ -91,6 +93,59 @@ export default defineConfig({
               })
 
               emit({ type: 'result', data: result, signals, ts: Date.now() })
+            } catch (err) {
+              emit({ type: 'error', msg: String(err), ts: Date.now() })
+            } finally {
+              res.end()
+            }
+          })
+        })
+
+        // GEO 모니터링 API (Module C)
+        server.middlewares.use('/api/geo-monitor', (req: IncomingMessage, res: ServerResponse) => {
+          if (req.method !== 'POST') {
+            res.writeHead(405, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ error: 'Method not allowed' }))
+            return
+          }
+          const chunks: Buffer[] = []
+          req.on('data', (c: Buffer) => chunks.push(c))
+          req.on('end', async () => {
+            res.writeHead(200, {
+              'Content-Type': 'application/x-ndjson',
+              'Cache-Control': 'no-cache',
+              'Transfer-Encoding': 'chunked',
+            })
+            const emit = (event: object) => {
+              try { res.write(JSON.stringify(event) + '\n') } catch { /* ignore */ }
+            }
+            try {
+              const body = JSON.parse(Buffer.concat(chunks).toString()) as {
+                targetDomain: string
+                targetBrand : string
+                queries     : GeoQuery[]
+                engines     : GeoEngine[]
+              }
+
+              // API 키: 환경변수 우선, 없으면 Claude 키만 사용 가능
+              const apiKeys: Partial<Record<GeoEngine, string>> = {
+                perplexity : process.env.PPLX_API_KEY,
+                chatgpt    : process.env.OPENAI_API_KEY,
+                claude     : process.env.ANTHROPIC_API_KEY,
+                gemini     : process.env.GEMINI_API_KEY,
+              }
+
+              const results = await runGeoMonitor({
+                targetDomain : body.targetDomain,
+                targetBrand  : body.targetBrand,
+                queries      : body.queries,
+                engines      : body.engines,
+                apiKeys,
+                emit,
+              })
+
+              const { rates, overall } = calcCitationRates(results, body.engines)
+              emit({ type: 'geo-result', results, citationRates: rates, overallCitationRate: overall, ts: Date.now() })
             } catch (err) {
               emit({ type: 'error', msg: String(err), ts: Date.now() })
             } finally {

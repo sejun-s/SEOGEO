@@ -12,7 +12,7 @@ interface HeaderProps {
 
 const TOP_TABS: { id: TopTab; label: string; soon?: boolean }[] = [
   { id: 'seo-geo',        label: 'SEO·GEO 분석' },
-  { id: 'geo-monitoring', label: 'GEO 모니터링', soon: true },
+  { id: 'geo-monitoring', label: 'GEO 모니터링' },
 ];
 
 export const Header: React.FC<HeaderProps> = ({ onScanUrl, isScanning, topTab, onTopTabChange }) => {
