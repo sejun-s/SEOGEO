@@ -9,12 +9,12 @@ import { Fragment, useState, useCallback, useEffect } from 'react'
 import {
   Play, Plus, Trash2, RefreshCw, ChevronDown, ChevronUp,
   AlertCircle, TrendingUp, Eye, Zap, Globe, Clock, BarChart2,
-  Link2, Repeat2, Tag, Info, Quote,
+  Link2, Repeat2, Tag, Info, Quote, Sparkles,
 } from 'lucide-react'
-import type { GeoEngine, GeoQuery, GeoMonitoringState, GeoAggregatedResult, GeoConfidence } from '../types'
+import type { GeoEngine, GeoQuery, GeoMonitoringState, GeoConfidence } from '../types'
 import {
   loadGeoState, saveGeoState,
-  runGeoCheck, summarizeByQuery, topCompetitors,
+  runGeoCheck, summarizeByQuery, topCompetitors, expandQueries,
 } from '../lib/geoMonitorLib'
 import type { GeoStreamEvent } from '../lib/geoMonitorLib'
 import { GeoActionPanel } from './GeoActionPanel'
@@ -26,9 +26,10 @@ const ENGINE_META: Record<GeoEngine, { label: string; color: string; bg: string;
   chatgpt   : { label: 'ChatGPT',    color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
   claude    : { label: 'Claude',     color: 'text-violet-700',  bg: 'bg-violet-50',  border: 'border-violet-200' },
   gemini    : { label: 'Gemini',     color: 'text-blue-700',    bg: 'bg-blue-50',    border: 'border-blue-200' },
+  naver     : { label: '네이버 AI',   color: 'text-green-700',   bg: 'bg-green-50',   border: 'border-green-200' },
 }
 
-const ALL_ENGINES: GeoEngine[] = ['perplexity', 'chatgpt', 'claude', 'gemini']
+const ALL_ENGINES: GeoEngine[] = ['perplexity', 'chatgpt', 'claude', 'gemini', 'naver']
 
 const CATEGORY_LABELS: Record<GeoQuery['category'], string> = {
   brand     : '브랜드',
@@ -210,18 +211,54 @@ function SynonymsEditor({
 function QueryEditor({
   queries,
   onChange,
+  targetDomain,
+  targetBrand,
+  brandSynonyms,
 }: {
-  queries : GeoQuery[]
-  onChange: (queries: GeoQuery[]) => void
+  queries      : GeoQuery[]
+  onChange     : (queries: GeoQuery[]) => void
+  targetDomain : string
+  targetBrand  : string
+  brandSynonyms: string[]
 }) {
-  const [newText, setNewText]         = useState('')
-  const [newCategory, setNewCategory] = useState<GeoQuery['category']>('brand')
+  const [newText, setNewText]           = useState('')
+  const [newCategory, setNewCategory]   = useState<GeoQuery['category']>('brand')
+  const [isExpanding, setIsExpanding]   = useState(false)
+  const [expandError, setExpandError]   = useState<string | null>(null)
 
   const add = () => {
     const t = newText.trim()
     if (!t) return
     onChange([...queries, { id: `q_${Date.now()}`, text: t, synonyms: [], category: newCategory }])
     setNewText('')
+  }
+
+  // P2-2: LLM 기반 질의 자동 확장
+  const handleExpand = async () => {
+    if (!targetDomain || !targetBrand) {
+      setExpandError('도메인과 브랜드명을 먼저 입력해주세요.')
+      return
+    }
+    setIsExpanding(true)
+    setExpandError(null)
+    try {
+      const generated = await expandQueries({
+        targetDomain,
+        targetBrand,
+        brandSynonyms,
+        existingTexts: queries.map(q => q.text),
+        count        : 6,
+      })
+      if (generated.length === 0) {
+        setExpandError('새로운 질의를 생성하지 못했습니다. 다시 시도해주세요.')
+        return
+      }
+      onChange([...queries, ...generated])
+    } catch (err) {
+      setExpandError(String(err).replace(/^Error:\s*/, ''))
+    } finally {
+      setIsExpanding(false)
+    }
   }
 
   return (
@@ -272,6 +309,31 @@ function QueryEditor({
           <Plus className="w-3.5 h-3.5" /> 추가
         </button>
       </div>
+
+      {/* P2-2: AI 질의 자동 생성 */}
+      <div className="flex items-center gap-2 pt-1">
+        <button
+          onClick={handleExpand}
+          disabled={isExpanding}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-violet-200 bg-violet-50 text-violet-700 text-[11px] font-bold hover:bg-violet-100 disabled:opacity-50 transition-colors"
+        >
+          {isExpanding
+            ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> AI가 질의 생성 중…</>
+            : <><Sparkles className="w-3.5 h-3.5" /> AI로 질의 6개 자동 생성</>
+          }
+        </button>
+        <span className="text-[10px] text-[#737c9c]">
+          브랜드·업계 맥락에 맞는 질의를 Claude가 생성합니다
+        </span>
+      </div>
+
+      {expandError && (
+        <div className="flex items-start gap-1.5 px-3 py-2 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-[11px]">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-px" />
+          <span className="flex-1">{expandError}</span>
+          <button onClick={() => setExpandError(null)} className="text-rose-400 hover:text-rose-600">✕</button>
+        </div>
+      )}
     </div>
   )
 }
@@ -470,7 +532,7 @@ export function GeoMonitoringDashboard() {
         </div>
 
         <p className="text-[10px] text-[#737c9c]">
-          ※ 각 엔진은 서버 환경변수(PPLX_API_KEY, OPENAI_API_KEY 등)가 설정된 경우만 작동합니다.
+          ※ 각 엔진은 서버 환경변수(PPLX_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY, NAVER_CLOVA_API_KEY)가 설정된 경우만 작동합니다.
         </p>
       </div>
 
@@ -480,7 +542,13 @@ export function GeoMonitoringDashboard() {
           <Zap className="w-4 h-4 text-amber-600" />
           <span className="text-sm font-bold text-[#1b2559]">질의 패널 ({state.queries.length}개)</span>
         </div>
-        <QueryEditor queries={state.queries} onChange={queries => update({ queries })} />
+        <QueryEditor
+          queries={state.queries}
+          onChange={queries => update({ queries })}
+          targetDomain={state.targetDomain}
+          targetBrand={state.targetBrand}
+          brandSynonyms={state.brandSynonyms}
+        />
       </div>
 
       {/* ── 오류 + 진행 상태 ── */}
@@ -542,7 +610,7 @@ export function GeoMonitoringDashboard() {
                 <span className="ml-2 normal-case font-normal text-[#4f6df5]">({latestRun.repeatCount}회 평균)</span>
               )}
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
               {ALL_ENGINES.map(engine => (
                 <EngineRateCard
                   key={engine}

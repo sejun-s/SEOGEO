@@ -50,6 +50,11 @@ const ENGINE_ADVICE: Record<GeoEngine, {
     weakWhy  : 'Gemini(Google AI)는 Core Web Vitals와 E-E-A-T 신호를 강하게 반영합니다.',
     weakHow  : 'PageSpeed Insights로 LCP·CLS 개선 / 저자 프로필·수상 이력·외부 인용 배지 추가를 권장합니다.',
   },
+  naver: {
+    weakTitle: '네이버 AI 인용 낮음 — 국내 플랫폼 신호 확보 필요',
+    weakWhy  : '네이버 HyperCLOVA X는 네이버 생태계(블로그·카페·지식iN·플레이스)와 국내 언론 데이터를 강하게 반영합니다. 글로벌 SEO만으로는 인용되지 않습니다.',
+    weakHow  : '① 네이버 서치어드바이저에 사이트 등록·사이트맵 제출 ② 네이버 블로그 공식 계정 운영(주 1회 이상) ③ 네이버 플레이스/스마트스토어 등록 ④ 국내 언론 보도자료 배포(뉴스와이어 등) ⑤ 지식iN 업계 질문에 전문가 답변',
+  },
 }
 
 function generateActions(run: GeoMonitoringRun): ActionItem[] {
@@ -121,7 +126,11 @@ function generateActions(run: GeoMonitoringRun): ActionItem[] {
     actions.push({
       id      : `engine-${engine}`,
       priority: (run.citationRates[engine] ?? 0) === 0 ? 'high' : 'medium',
-      icon    : engine === 'perplexity' ? '🔵' : engine === 'chatgpt' ? '🟢' : engine === 'claude' ? '🟣' : '🔷',
+      icon    :
+        engine === 'perplexity' ? '🔵' :
+        engine === 'chatgpt'    ? '🟢' :
+        engine === 'claude'     ? '🟣' :
+        engine === 'naver'      ? '🇰🇷' : '🔷',
       title   : adv.weakTitle,
       why     : adv.weakWhy,
       how     : adv.weakHow,

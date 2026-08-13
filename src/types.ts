@@ -369,7 +369,7 @@ export interface SiteCrawlResult {
 // GEO 모니터링 (Module C) — AI 인용률 실측 엔진
 // ─────────────────────────────────────────────────────────────
 
-export type GeoEngine = 'perplexity' | 'chatgpt' | 'claude' | 'gemini';
+export type GeoEngine = 'perplexity' | 'chatgpt' | 'claude' | 'gemini' | 'naver';
 
 export type GeoQueryCategory = 'brand' | 'product' | 'industry' | 'competitor';
 

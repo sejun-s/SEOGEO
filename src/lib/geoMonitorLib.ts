@@ -151,6 +151,36 @@ export async function runGeoCheck(
   return finalRun
 }
 
+// ── P2-2: LLM 기반 질의 자동 확장 ──────────────────────────────────────────
+
+export async function expandQueries(params: {
+  targetDomain : string
+  targetBrand  : string
+  brandSynonyms: string[]
+  existingTexts: string[]
+  count?       : number
+}): Promise<GeoQuery[]> {
+  const res = await fetch('/api/geo-expand-queries', {
+    method : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body   : JSON.stringify(params),
+  })
+
+  const data = await res.json() as {
+    queries?: Array<{ text: string; category: GeoQuery['category'] }>
+    error?  : string
+  }
+
+  if (!res.ok || data.error) throw new Error(data.error ?? '질의 생성에 실패했습니다.')
+
+  return (data.queries ?? []).map((q, i) => ({
+    id      : `q_ai_${Date.now()}_${i}`,
+    text    : q.text,
+    synonyms: [],
+    category: q.category,
+  }))
+}
+
 // ── 통계 헬퍼 ───────────────────────────────────────────────────────────────
 
 /** 질의별 집계 요약 */

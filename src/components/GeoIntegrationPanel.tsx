@@ -15,6 +15,7 @@ const ENGINE_META: Record<GeoEngine, { label: string; color: string; bg: string;
   chatgpt   : { label: 'ChatGPT',    color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200' },
   claude    : { label: 'Claude',     color: 'text-violet-700',  bg: 'bg-violet-50',  border: 'border-violet-200' },
   gemini    : { label: 'Gemini',     color: 'text-blue-700',    bg: 'bg-blue-50',    border: 'border-blue-200'  },
+  naver     : { label: '네이버 AI',   color: 'text-green-700',   bg: 'bg-green-50',   border: 'border-green-200' },
 }
 
 interface Props {
@@ -104,7 +105,7 @@ export function GeoIntegrationPanel({ audit, onGoToGeo }: Props) {
             /* ── 측정 기록 있음 ── */
             <div className="p-4 space-y-4">
               {/* 엔진별 인용률 */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
                 {engines.map(engine => {
                   const m    = ENGINE_META[engine]
                   const rate = matchedRun.citationRates[engine] ?? 0

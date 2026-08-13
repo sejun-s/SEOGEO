@@ -1,10 +1,11 @@
 /**
- * GEO Monitoring Engine (Module C) — v2
- * AI 인용률 실측 엔진 — Perplexity / ChatGPT / Claude / Gemini
+ * GEO Monitoring Engine (Module C) — v3
+ * AI 인용률 실측 엔진 — Perplexity / ChatGPT / Claude / Gemini / 네이버 HyperCLOVA X
  *
  * P0-1: Perplexity citations[] URL 기반 정확도 향상
  * P0-2: 반복 실행 (1/3/5회) + 인용률 % + 신뢰도 레벨
  * P0-3: 브랜드 동의어 등록 → 감지 정확도 2~3x
+ * P2-1: 네이버 HyperCLOVA X — 한국 시장 특화 (글로벌 경쟁사 미지원 영역)
  */
 
 import type { GeoEngine, GeoQuery, GeoCheckResult, GeoAggregatedResult, GeoConfidence } from '../types.ts'
@@ -238,6 +239,68 @@ async function queryGemini(
   return { text: data.candidates?.[0]?.content?.parts?.[0]?.text ?? '', citationUrls: [] }
 }
 
+// ── P2-1: 네이버 HyperCLOVA X (한국 시장 특화) ────────────────────────────
+
+interface ClovaResponse {
+  status?: { code?: string; message?: string }
+  result?: {
+    message?: { content?: string }
+    // 검색 기반 응답 시 참조 URL
+    references?: Array<{ url?: string; title?: string }>
+  }
+}
+
+async function queryNaverClova(
+  queryText: string,
+  apiKey   : string,
+): Promise<{ text: string; citationUrls: string[] }> {
+  // CLOVA Studio Chat Completions v3
+  // apiKey 형식: "nv-xxxxx" (Bearer 인증)
+  const res = await fetch(
+    'https://clovastudio.stream.ntruss.com/testapp/v3/chat-completions/HCX-005',
+    {
+      method : 'POST',
+      headers: {
+        'Content-Type' : 'application/json',
+        Authorization  : `Bearer ${apiKey}`,
+        'X-NCP-CLOVASTUDIO-REQUEST-ID': `geo_${Date.now()}`,
+        Accept         : 'application/json',
+      },
+      body: JSON.stringify({
+        messages: [
+          {
+            role   : 'system',
+            content: '당신은 한국어 웹 검색 기반 AI 어시스턴트입니다. 사용자의 질문에 대해 관련 웹사이트, 브랜드명, 도메인을 구체적으로 언급하며 답변하세요.',
+          },
+          { role: 'user', content: queryText },
+        ],
+        maxTokens  : 600,
+        temperature: 0.5,
+        topP       : 0.8,
+      }),
+    },
+  )
+
+  if (!res.ok) {
+    const err = await res.text()
+    throw new Error(`Naver CLOVA API error ${res.status}: ${err.slice(0, 200)}`)
+  }
+
+  const data = await res.json() as ClovaResponse
+
+  // CLOVA는 HTTP 200에도 status.code로 오류를 반환
+  if (data.status?.code && data.status.code !== '20000') {
+    throw new Error(`Naver CLOVA error ${data.status.code}: ${data.status.message ?? 'unknown'}`)
+  }
+
+  return {
+    text        : data.result?.message?.content ?? '',
+    citationUrls: (data.result?.references ?? [])
+      .map(r => r.url)
+      .filter((u): u is string => typeof u === 'string'),
+  }
+}
+
 // ── 단일 실행 ───────────────────────────────────────────────────────────────
 
 async function runSingleCheck(
@@ -288,6 +351,12 @@ async function runSingleCheck(
       case 'gemini': {
         const r = await queryGemini(query.text, key)
         responseText = r.text
+        break
+      }
+      case 'naver': {
+        const r = await queryNaverClova(query.text, key)
+        responseText    = r.text
+        apiCitationUrls = r.citationUrls
         break
       }
     }
