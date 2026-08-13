@@ -1,6 +1,9 @@
 import type { GeoEngine } from '../types.ts'
 
-const keys: Partial<Record<GeoEngine, string>> = {}
+const globalKeyStore = globalThis as typeof globalThis & {
+  __seogeoInternalApiKeys?: Partial<Record<GeoEngine, string>>
+}
+const keys = globalKeyStore.__seogeoInternalApiKeys ??= {}
 
 export function setInternalApiKey(engine: GeoEngine, value: string) {
   keys[engine] = value.trim()

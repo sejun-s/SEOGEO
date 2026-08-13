@@ -325,7 +325,7 @@ function QueryEditor({
           }
         </button>
         <span className="text-[10px] text-[#737c9c]">
-          브랜드·업계 맥락에 맞는 질의를 Claude가 생성합니다
+          연결된 Gemini 또는 Claude가 브랜드·업계 맥락에 맞는 질의를 생성합니다
         </span>
       </div>
 

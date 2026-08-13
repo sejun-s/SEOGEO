@@ -253,10 +253,12 @@ export default defineConfig({
                 count?       : number
               }
 
-              const apiKey = process.env.ANTHROPIC_API_KEY
-              if (!apiKey) {
+              const runtimeKeys = { ...environmentGeoKeys(), ...getInternalApiKeys() }
+              const provider = runtimeKeys.claude ? 'claude' : runtimeKeys.gemini ? 'gemini' : null
+              const apiKey = provider ? runtimeKeys[provider] : undefined
+              if (!apiKey || !provider) {
                 res.writeHead(400, { 'Content-Type': 'application/json' })
-                res.end(JSON.stringify({ error: 'ANTHROPIC_API_KEY가 서버에 설정되지 않았습니다.' }))
+                res.end(JSON.stringify({ error: '질문 생성에는 Gemini 또는 Claude API 키가 필요합니다.' }))
                 return
               }
 
@@ -266,6 +268,7 @@ export default defineConfig({
                 brandSynonyms: body.brandSynonyms ?? [],
                 existingTexts: body.existingTexts ?? [],
                 apiKey,
+                provider,
                 count        : Math.min(body.count ?? 6, 12),
               })
 

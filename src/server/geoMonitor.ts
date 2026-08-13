@@ -239,9 +239,12 @@ async function queryGemini(
   queryText: string,
   apiKey   : string,
 ): Promise<{ text: string; citationUrls: string[] }> {
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${apiKey}`,
-    {
+  let res: Response | null = null
+  let lastError = ''
+  for (const model of ['gemini-3.6-flash', 'gemini-3.5-flash']) {
+    res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      {
       method : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body   : JSON.stringify({
@@ -249,12 +252,15 @@ async function queryGemini(
         tools          : [{ google_search: {} }],
         generationConfig: { maxOutputTokens: 600 },
       }),
-    },
-  )
+      },
+    )
+    if (res.ok) break
+    lastError = await res.text()
+    if (![403, 404].includes(res.status)) break
+  }
 
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Gemini API error ${res.status}: ${err.slice(0, 200)}`)
+  if (!res?.ok) {
+    throw new Error(`Gemini API error ${res?.status ?? 'unknown'}: ${lastError.slice(0, 200)}`)
   }
 
   const data = await res.json() as GeminiGroundedResult

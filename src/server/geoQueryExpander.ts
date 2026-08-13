@@ -13,6 +13,9 @@ export interface ExpandedQuery {
 interface ClaudeMessage {
   content?: Array<{ type: string; text?: string }>
 }
+interface GeminiMessage {
+  candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
+}
 
 /**
  * 도메인·브랜드 기반으로 GEO 모니터링 질의를 자동 생성
@@ -23,9 +26,10 @@ export async function expandGeoQueries(opts: {
   brandSynonyms : string[]
   existingTexts : string[]   // 기존 질의 (중복 방지용)
   apiKey        : string
+  provider      : 'claude' | 'gemini'
   count         : number     // 생성할 질의 수 (기본 6)
 }): Promise<ExpandedQuery[]> {
-  const { targetDomain, targetBrand, brandSynonyms, existingTexts, apiKey, count } = opts
+  const { targetDomain, targetBrand, brandSynonyms, existingTexts, apiKey, provider, count } = opts
 
   const synonymPart = brandSynonyms.length > 0
     ? `\n- 브랜드 동의어: ${brandSynonyms.join(', ')}`
@@ -61,30 +65,34 @@ export async function expandGeoQueries(opts: {
   { "text": "...", "category": "product" }
 ]`
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method : 'POST',
-    headers: {
-      'Content-Type'     : 'application/json',
-      'x-api-key'        : apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model     : 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
-      messages  : [{ role: 'user', content: prompt }],
-    }),
-  })
+  let res: Response
+  if (provider === 'gemini') {
+    let candidate: Response | null = null
+    for (const model of ['gemini-3.6-flash', 'gemini-3.5-flash']) {
+      candidate = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }] }),
+        })
+      if (candidate.ok || ![403, 404].includes(candidate.status)) break
+    }
+    res = candidate!
+  } else {
+    res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 1024, messages: [{ role: 'user', content: prompt }] }),
+      })
+  }
 
   if (!res.ok) {
     const err = await res.text()
-    throw new Error(`Claude API error ${res.status}: ${err.slice(0, 200)}`)
+    throw new Error(`${provider === 'gemini' ? 'Gemini' : 'Claude'} API error ${res.status}: ${err.slice(0, 200)}`)
   }
 
-  const data = await res.json() as ClaudeMessage
-  const raw  = (data.content ?? [])
-    .filter(b => b.type === 'text')
-    .map(b => b.text ?? '')
-    .join('')
+  const data = await res.json() as ClaudeMessage & GeminiMessage
+  const raw = provider === 'gemini'
+    ? (data.candidates?.[0]?.content?.parts ?? []).map(part => part.text ?? '').join('')
+    : (data.content ?? []).filter(block => block.type === 'text').map(block => block.text ?? '').join('')
 
   // JSON 파싱 — 코드 블록이 있으면 제거
   const jsonStr = raw

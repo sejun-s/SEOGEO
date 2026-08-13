@@ -25,9 +25,10 @@ export default async function handler(req: any, res: any) {
       return
     }
 
-    const apiKey = process.env.ANTHROPIC_API_KEY
-    if (!apiKey) {
-      res.status(400).json({ error: 'ANTHROPIC_API_KEY가 서버에 설정되지 않았습니다.' })
+    const provider = process.env.ANTHROPIC_API_KEY ? 'claude' : process.env.GEMINI_API_KEY ? 'gemini' : null
+    const apiKey = provider === 'claude' ? process.env.ANTHROPIC_API_KEY : provider === 'gemini' ? process.env.GEMINI_API_KEY : undefined
+    if (!apiKey || !provider) {
+      res.status(400).json({ error: '질문 생성에는 Gemini 또는 Claude API 키가 필요합니다.' })
       return
     }
 
@@ -37,6 +38,7 @@ export default async function handler(req: any, res: any) {
       brandSynonyms: body.brandSynonyms ?? [],
       existingTexts: body.existingTexts ?? [],
       apiKey,
+      provider,
       count        : Math.min(body.count ?? 6, 12),
     })
 
