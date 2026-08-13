@@ -1,5 +1,6 @@
 import type { AuditResult } from '../types'
 import { CheckCircle2, XCircle, AlertCircle, ExternalLink } from 'lucide-react'
+import { interpretRobotsAccess } from '../lib/robotsPolicy'
 
 interface NaverReadinessPanelProps {
   audit: AuditResult
@@ -36,14 +37,10 @@ export function NaverReadinessPanel({ audit }: NaverReadinessPanelProps) {
   const naverScore = audit.naverScore ?? 0
 
   // Yeti 봇 접근 여부 (botPolicies에서 확인)
-  const yetiPolicy = audit.botPolicies?.find(b => /yeti/i.test(b.botName))
-  const yetiBlocked = yetiPolicy?.status === 'blocked'
-
-  // robots.txt에서 직접 확인 (더 정확)
   const robotsTxt = s?.robotsTxt ?? ''
-  const yetiExplicitAllow = /user-agent:\s*yeti/i.test(robotsTxt) && !/disallow:\s*\//i.test(
-    robotsTxt.slice(robotsTxt.search(/user-agent:\s*yeti/i))
-  )
+  const yetiState = interpretRobotsAccess(robotsTxt, 'yeti')
+  const yetiBlocked = yetiState === 'explicitly_blocked'
+  const yetiExplicitAllow = yetiState === 'explicitly_allowed'
 
   // 네이버 관련 criteria
   const naverCriteria = (audit.criteria ?? []).filter(c => c.category === 'naver')

@@ -6,6 +6,7 @@ import type {
   SearchEligibilityResult,
 } from '../types.ts'
 import { crawlSite } from './siteCrawler.ts'
+import { interpretRobotsAccess } from '../lib/robotsPolicy.ts'
 
 export type { PageSignals }
 
@@ -82,6 +83,7 @@ export async function fetchPageSignals(targetUrl: string, emit?: EmitFn): Promis
       jsonLdRaw: [], robotsTxt, hasViewport: false, hasCharset: false,
       wordCount: 0, internalLinks: 0, externalLinks: 0,
       imageCount: 0, imagesWithAlt: 0, hasSchema: false, hasHreflang: false, hasSitemap,
+      questionHeadingCount: 0, statisticCount: 0, hasAuthorSignal: false, hasDateSignal: false, schemaParseValid: true,
       hasGA4: false, hasGTM: false, hasUALegacy: false,
       hasFbPixel: false, hasNaverAnalytics: false,
     }
@@ -125,6 +127,12 @@ export async function fetchPageSignals(targetUrl: string, emit?: EmitFn): Promis
   const imgTags = html.match(/<img[^>]+>/gi) ?? []
   const imagesWithAlt = imgTags.filter(t => /alt=["'][^"']+["']/i.test(t)).length
   const wordCount = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().split(' ').filter(w => w.length > 1).length
+  const visibleText = html.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+  const questionHeadingCount = [...h2s, ...h3s].filter(heading => /[?？]|(?:무엇|왜|어떻게|방법|비교|추천|가격|비용|효과|장점|단점)/i.test(heading)).length
+  const statisticCount = (visibleText.match(/\b\d+(?:[.,]\d+)?\s*(?:%|퍼센트|배|건|명|원|개월|년|시간|분)\b/g) ?? []).length
+  const hasAuthorSignal = /"author"\s*:|rel=["']author["']|class=["'][^"']*author/i.test(html)
+  const hasDateSignal = /"date(?:published|modified)"\s*:|<time\b/i.test(html)
+  const schemaParseValid = jsonLdRaw.every(raw => { try { JSON.parse(raw); return true } catch { return false } })
 
   // ── Analytics detection ────────────────────────────────────────────────────
   const ga4IdMatch = html.match(/gtag\s*\(\s*['"]config['"]\s*,\s*['"]([Gg]-[A-Z0-9]+)['"]/)?.[1]
@@ -168,6 +176,7 @@ export async function fetchPageSignals(targetUrl: string, emit?: EmitFn): Promis
     wordCount, internalLinks, externalLinks,
     imageCount: imgTags.length, imagesWithAlt,
     hasSchema, hasHreflang, hasSitemap,
+    questionHeadingCount, statisticCount, hasAuthorSignal, hasDateSignal, schemaParseValid,
     hasGA4, ga4MeasurementId, hasGTM, gtmId, hasUALegacy, hasFbPixel, hasNaverAnalytics,
   }
 
@@ -365,40 +374,7 @@ export async function fetchPageSignals(targetUrl: string, emit?: EmitFn): Promis
 type BotAccessState = 'explicitly_allowed' | 'allowed_by_general_rule' | 'explicitly_blocked' | 'unknown'
 
 function interpretBotAccess(rb: string, botName: string): BotAccessState {
-  if (!rb) return 'unknown'
-  const lines = rb.split('\n').map(l => l.trim().toLowerCase())
-  let activeAgents: string[] = []
-  let rulesStarted = false
-  const rules: Record<string, { allowRoot: boolean; disallowAll: boolean }> = {}
-
-  for (const line of lines) {
-    if (!line || line.startsWith('#')) continue
-    if (line.startsWith('user-agent:')) {
-      if (rulesStarted) activeAgents = []
-      activeAgents.push(line.slice('user-agent:'.length).trim())
-      rulesStarted = false
-      continue
-    }
-    if (!line.startsWith('allow:') && !line.startsWith('disallow:')) continue
-    rulesStarted = true
-    const [directive, ...rest] = line.split(':')
-    const path = rest.join(':').trim()
-    for (const agent of activeAgents) {
-      rules[agent] ??= { allowRoot: false, disallowAll: false }
-      if (directive === 'allow' && (path === '/' || path === '/*')) rules[agent].allowRoot = true
-      if (directive === 'disallow' && (path === '/' || path === '/*')) rules[agent].disallowAll = true
-    }
-  }
-
-  const named = rules[botName.toLowerCase()]
-  if (named) {
-    if (named.disallowAll && !named.allowRoot) return 'explicitly_blocked'
-    if (named.allowRoot) return 'explicitly_allowed'
-    return 'allowed_by_general_rule'
-  }
-  const general = rules['*']
-  if (general?.disallowAll && !general.allowRoot) return 'explicitly_blocked'
-  return 'allowed_by_general_rule'
+  return interpretRobotsAccess(rb, botName)
 }
 
 // ─── 검색 자격 게이트 (Block 4) ──────────────────────────────────────────────
@@ -406,7 +382,7 @@ function interpretBotAccess(rb: string, botName: string): BotAccessState {
 export function calcSearchEligibility(s: PageSignals): SearchEligibilityResult {
   const rb = s.robotsTxt.toLowerCase()
   const noindex = s.metaRobots.toLowerCase().includes('noindex')
-  const blocked = rb.includes('disallow: /') && !rb.includes('allow: /')
+  const generalAccess = interpretBotAccess(rb, '*')
   const httpOk = s.statusCode >= 200 && s.statusCode < 400
 
   const checks: SearchEligibilityResult['checks'] = [
@@ -419,8 +395,8 @@ export function calcSearchEligibility(s: PageSignals): SearchEligibilityResult {
     {
       id: 'robots_access',
       label: 'robots.txt 크롤링',
-      status: !s.robotsTxt ? 'unknown' : blocked ? 'fail' : 'pass',
-      detail: !s.robotsTxt ? '확인 불가' : blocked ? 'Disallow: / 감지' : '허용',
+      status: !s.robotsTxt ? 'unknown' : generalAccess === 'explicitly_blocked' ? 'fail' : 'pass',
+      detail: !s.robotsTxt ? '확인 불가' : generalAccess === 'explicitly_blocked' ? '루트 전체 차단 규칙' : '공개 경로 수집 가능',
     },
     {
       id: 'noindex',
@@ -512,6 +488,14 @@ export interface CategoryScores {
   measurementConfidence: MeasurementConfidence
   schemaEvaluationLevel: SchemaEvaluationLevel
   scoreModelVersion: string
+  diagnosticScores: {
+    searchEligibility: number
+    technicalStructure: number
+    contentExtractability: number
+    evidenceQuality: number
+    entityClarity: number
+    platformAccessibility: number
+  }
 }
 
 export function calcCategoryScore(s: PageSignals): CategoryScores {
@@ -585,13 +569,51 @@ export function calcCategoryScore(s: PageSignals): CategoryScores {
   if (s.hasSitemap)                                            naver += 10
   if (s.canonical)                                             naver += 10
 
+  // v1.0-r3: 독립 증거 축. 확인된 신호만 가산하며 외부 계정 데이터는 포함하지 않는다.
+  const eligibilityChecks = calcSearchEligibility(s).checks
+  const knownEligibility = eligibilityChecks.filter(check => check.status !== 'unknown')
+  const searchEligibilityScore = knownEligibility.length
+    ? Math.round(knownEligibility.reduce((sum, check) => sum + (check.status === 'pass' ? 100 : check.status === 'warning' ? 50 : 0), 0) / knownEligibility.length)
+    : 0
+  const technicalStructure = Math.min(100,
+    (s.statusCode === 200 ? 15 : 0) + (s.isHttps ? 10 : 0) + (!s.metaRobots.toLowerCase().includes('noindex') ? 15 : 0) +
+    (s.canonical ? 10 : 0) + (s.h1s.length === 1 ? 10 : s.h1s.length > 0 ? 4 : 0) + (s.hasViewport ? 8 : 0) +
+    (s.title ? 8 : 0) + (s.metaDescription ? 6 : 0) + (s.internalLinks > 0 ? 5 : 0) +
+    (s.hasSchema && s.schemaParseValid ? 8 : s.hasSchema ? 2 : 0) + (s.responseTime < 3000 ? 5 : s.responseTime < 6000 ? 2 : 0)
+  )
+  const questionHeadingCount = s.questionHeadingCount ?? 0
+  const statisticCount = s.statisticCount ?? 0
+  const schemaParseValid = s.schemaParseValid ?? true
+  const hasAuthorSignal = s.hasAuthorSignal ?? false
+  const hasDateSignal = s.hasDateSignal ?? false
+  const contentExtractability = Math.min(100,
+    (s.h1s.length === 1 ? 15 : 0) + (s.h2s.length > 0 ? 15 : 0) + (s.h3s.length > 0 ? 8 : 0) +
+    Math.min(18, questionHeadingCount * 6) + (s.wordCount >= 400 ? 18 : s.wordCount >= 200 ? 12 : s.wordCount >= 80 ? 6 : 0) +
+    (s.title && s.metaDescription ? 10 : 0) + (s.internalLinks >= 3 ? 8 : s.internalLinks > 0 ? 4 : 0) +
+    (s.imageCount === 0 || s.imagesWithAlt / s.imageCount >= 0.8 ? 8 : 3)
+  )
+  const evidenceQuality = Math.min(100,
+    Math.min(30, s.externalLinks * 10) + Math.min(25, statisticCount * 5) +
+    (hasAuthorSignal ? 20 : 0) + (hasDateSignal ? 15 : 0) +
+    (s.externalLinks > 0 && statisticCount > 0 ? 10 : 0)
+  )
+  const hasOrgSchema = schemaContent.includes('organization') || schemaContent.includes('person')
+  const entityClarity = Math.min(100,
+    (s.hasSchema && schemaParseValid ? 20 : 0) + (hasOrgSchema ? 25 : 0) +
+    (schemaContent.includes('sameas') ? 25 : 0) + (s.canonical ? 10 : 0) +
+    (s.ogTitle && s.ogDescription ? 10 : 0) + (s.ogImage ? 5 : 0) + (s.title ? 5 : 0)
+  )
+  const accessValue = (state: BotAccessState) => state === 'explicitly_blocked' ? 0 : state === 'unknown' ? 0 : 100
+  const platformAccessibility = Math.round((accessValue(oaiState) + accessValue(bingState) + accessValue(yetiState)) / 3)
+  const diagnosticScores = { searchEligibility: searchEligibilityScore, technicalStructure, contentExtractability, evidenceQuality, entityClarity, platformAccessibility }
+
   // SEO Foundation 점수 (Block 4 — Technical + 색인 가능성 중심)
   const eligibility = calcSearchEligibility(s)
-  const rawSeoFoundation = Math.round(Math.min(100, tech) * 0.70 + Math.min(100, schema) * 0.15 + Math.min(100, eeat) * 0.15)
+  const rawSeoFoundation = Math.round(technicalStructure * 0.55 + searchEligibilityScore * 0.30 + contentExtractability * 0.15)
   const seoFoundation = eligibility.status === 'fail' ? Math.min(25, rawSeoFoundation) : rawSeoFoundation
 
   // AI Citation Readiness (Block 3 — 정적 분석 기반)
-  const aiCitationReadiness = calcAiCitationReadiness(s)
+  const aiCitationReadiness = Math.round(platformAccessibility * 0.25 + contentExtractability * 0.30 + evidenceQuality * 0.25 + entityClarity * 0.20)
 
   // 검색 자격 게이트 (Block 4)
   // 측정 신뢰도 (Block 4)
@@ -626,7 +648,8 @@ export function calcCategoryScore(s: PageSignals): CategoryScores {
     searchEligibility:         eligibility,
     measurementConfidence:     confidence,
     schemaEvaluationLevel:     schemaLevel,
-    scoreModelVersion:         'v1.0-r2',
+    scoreModelVersion:         'v1.0-r3',
+    diagnosticScores,
   }
 }
 
@@ -792,9 +815,9 @@ export function generateRuleBasedResult(signals: PageSignals, scores: CategorySc
   }
   {
     // Block 4: 단어 수 절대 임계값 제거 — 페이지 목적에 맞는 깊이 평가
-    const hasDepth = signals.wordCount > 300
-    const hasRichContent = signals.wordCount > 800
-    const contentScore = signals.wordCount > 2000 ? 85 : signals.wordCount > 800 ? 70 : signals.wordCount > 300 ? 50 : signals.wordCount > 100 ? 35 : 20
+    const hasDepth = scores.diagnosticScores.contentExtractability >= 60
+    const hasRichContent = scores.diagnosticScores.contentExtractability >= 80
+    const contentScore = scores.diagnosticScores.contentExtractability
     criteria.push({
       id: 'chatgpt_content', name: '콘텐츠 깊이 및 구조', category: 'chatgpt',
       score: contentScore,
@@ -802,7 +825,7 @@ export function generateRuleBasedResult(signals: PageSignals, scores: CategorySc
       weight: '높음',
       scoringBasis: `실측: ${signals.wordCount}단어, H2 ${signals.h2s.length}개, H3 ${signals.h3s.length}개. 콘텐츠 깊이는 절대 단어 수가 아닌 페이지 목적에 맞는 완결성으로 평가합니다.`,
       evaluationCriteria: 'AI 인용 가능성: 페이지가 대상 질문에 직접적이고 완전하게 답할 수 있는지, 구체적 수치·사례·출처 인용이 있는지 평가 (연구 근거: arXiv:2311.09735)',
-      currentState: `${signals.wordCount}단어 | H2 ${signals.h2s.length}개 | H3 ${signals.h3s.length}개`,
+      currentState: `${signals.wordCount}단어 | 질문형 제목 ${signals.questionHeadingCount}개 | H2 ${signals.h2s.length}개`,
       improvement: hasRichContent
         ? 'FAQ 섹션, 구체적 수치·사례 추가로 AI 인용 가능성 증대 가능'
         : hasDepth
@@ -818,40 +841,40 @@ export function generateRuleBasedResult(signals: PageSignals, scores: CategorySc
   {
     // Block 3: H2 최소 3개를 절대 요건에서 제거. 구조 존재 여부와 의미 관계 평가
     const hasAnyStructure = signals.h2s.length > 0
-    const hasGoodStructure = signals.h2s.length >= 2
-    const structureScore = signals.h2s.length >= 4 ? 90 : hasGoodStructure ? 72 : hasAnyStructure ? 48 : 20
+    const hasGoodStructure = signals.h2s.length >= 2 && signals.questionHeadingCount > 0
+    const structureScore = scores.diagnosticScores.contentExtractability
     criteria.push({
       id: 'geo_structure', name: '콘텐츠 계층 구조 (GEO)', category: 'geo',
       score: structureScore,
       status: hasGoodStructure ? 'pass' : hasAnyStructure ? 'warning' : 'warning',
       weight: '높음',
-      scoringBasis: `실측: H2 ${signals.h2s.length}개, H3 ${signals.h3s.length}개. GEO 연구(arXiv:2311.09735): 명확한 섹션 구조가 AI 엔진 인용 확률을 높임. H2 최소 3개는 절대 요건이 아니며 페이지 목적에 따라 달라집니다.`,
-      evaluationCriteria: 'GEO: H2/H3 계층 구조로 탐색 가능한 포맷, 각 섹션 명확한 주제 구분. 짧은 페이지(FAQ, 제품 등)는 구조가 단순해도 목적 달성 가능.',
-      currentState: `H2 ${signals.h2s.length}개 | H3 ${signals.h3s.length}개`,
+      scoringBasis: `실측: H2 ${signals.h2s.length}개, H3 ${signals.h3s.length}개, 질문형 제목 ${signals.questionHeadingCount}개. 제목 수가 아니라 질문과 직접 답변의 추출 가능성을 평가합니다.`,
+      evaluationCriteria: 'GEO 콘텐츠 구조: 질문 또는 명확한 주제 제목 아래에 독립적으로 이해 가능한 직접 답변과 보충 근거를 배치.',
+      currentState: `질문형 제목 ${signals.questionHeadingCount}개 | H2 ${signals.h2s.length}개 | H3 ${signals.h3s.length}개`,
       improvement: hasGoodStructure
-        ? '구조 양호. 각 H2 섹션 첫 문장에 핵심 답변 배치(역피라미드 구조) 권장'
+        ? '구조 양호. 각 질문형 제목 바로 아래 2~3문장 직접 답변과 근거를 유지하세요.'
         : hasAnyStructure
         ? '기본 구조 존재. 주요 주제를 추가 H2로 구분하면 AI 인용 구조 개선됨'
-        : '① 페이지 주요 주제를 H2 태그로 구분\n② 각 H2 아래 내용을 명확한 문단으로 작성\n③ 세부 항목은 H3으로 추가 구분 (페이지 분량에 맞게)',
+        : '① 실제 고객 질문을 H2로 작성\n② 제목 바로 아래 첫 문단에서 결론부터 답변\n③ 다음 문단에 수치·사례·출처를 연결',
       priority: hasGoodStructure ? 'low' : hasAnyStructure ? 'medium' : 'high',
       estimatedScoreGain: hasGoodStructure ? 3 : hasAnyStructure ? 10 : 18,
       referenceGuide: 'GEO arXiv:2311.09735: https://arxiv.org/abs/2311.09735',
-      codeSnippet: !hasAnyStructure
-        ? `<!-- 페이지 콘텐츠 구조 예시 -->\n<h1>메인 제목 (핵심 키워드)</h1>\n\n<h2>서비스 소개</h2>\n<p>핵심 내용을 첫 문장에...</p>\n\n<h2>주요 기능</h2>\n<p>구체적 설명...</p>\n\n<h2>도입 사례 / FAQ</h2>\n<p>자주 묻는 질문과 답변...</p>`
+      codeSnippet: !hasGoodStructure
+        ? `<!-- Answer-First 콘텐츠 구조 -->\n<h2>이 서비스는 어떤 문제를 해결하나요?</h2>\n<p><strong>핵심 답변:</strong> 대상 고객의 문제와 해결 결과를 2~3문장으로 먼저 설명합니다.</p>\n<p>구체적인 수치, 적용 사례와 검증 가능한 출처를 이어서 제시합니다.</p>`
         : undefined,
       codeType: 'html' as const,
     })
   }
   {
-    const extOk = signals.externalLinks >= 3
+    const extOk = signals.externalLinks > 0 && signals.statisticCount > 0
     criteria.push({
       id: 'geo_citation', name: '외부 출처 인용 (권위성)', category: 'geo',
-      score: signals.externalLinks >= 5 ? 90 : extOk ? 70 : signals.externalLinks > 0 ? 45 : 20,
+      score: scores.diagnosticScores.evidenceQuality,
       status: extOk ? 'pass' : 'warning',
       weight: '중간',
-      scoringBasis: `실측: 외부 링크 ${signals.externalLinks}개. GEO 연구: 권위있는 외부 출처 인용이 AI 신뢰도 평가에 긍정적 영향.`,
+      scoringBasis: `실측: 외부 링크 ${signals.externalLinks}개, 수치 표현 ${signals.statisticCount}개, 저자 신호 ${signals.hasAuthorSignal ? '있음' : '없음'}, 날짜 신호 ${signals.hasDateSignal ? '있음' : '없음'}.`,
       evaluationCriteria: 'GEO: 권위있는 외부 출처 인용, 통계/연구 근거 제시',
-      currentState: `외부 링크 ${signals.externalLinks}개`,
+      currentState: `출처 링크 ${signals.externalLinks}개 | 수치 근거 ${signals.statisticCount}개`,
       improvement: extOk
         ? '양호. 정부/학술/언론 출처 인용 강화 권장'
         : '① 관련 업계 통계, 연구 논문, 공식 가이드라인 링크 추가\n② 예: "출처: 한국인터넷진흥원(KISA) 2024 보고서"\n③ 외부 링크는 새 탭으로 열기 (target="_blank")',
@@ -859,7 +882,7 @@ export function generateRuleBasedResult(signals: PageSignals, scores: CategorySc
       estimatedScoreGain: extOk ? 2 : 12,
       referenceGuide: 'GEO arXiv:2311.09735: https://arxiv.org/abs/2311.09735',
       codeSnippet: !extOk
-        ? `<!-- 외부 출처 링크 예시 -->\n<p>국내 AI 시장은 연 30% 성장 중입니다.\n  (<a href="https://www.kisa.or.kr/" target="_blank" rel="noopener">출처: KISA 2024</a>)\n</p>`
+        ? `<!-- 검증한 원문에서 수치와 출처를 직접 입력하세요 -->\n<p><strong>[검증된 핵심 수치]</strong>를 바탕으로 [의미와 적용 범위]를 설명합니다.\n  (<a href="[원문 URL]" target="_blank" rel="noopener noreferrer">출처: [기관명·문서명·발행일]</a>)\n</p>`
         : undefined,
       codeType: 'html' as const,
     })
@@ -1155,7 +1178,7 @@ export function generateRuleBasedResult(signals: PageSignals, scores: CategorySc
 
   const ruleResults = criteria.map(c => ({
     ruleId: c.id,
-    ruleVersion: 'v1.0-r2',
+    ruleVersion: 'v1.0-r3',
     title: c.name,
     category: c.category,
     status: (c.status === 'pass' ? 'pass' : c.status === 'fail' ? 'fail' : 'warning') as 'pass' | 'warning' | 'fail' | 'unknown' | 'not_applicable',
@@ -1185,6 +1208,13 @@ export function generateRuleBasedResult(signals: PageSignals, scores: CategorySc
     schemaScore: scores.schemaScore,
     bingScore: scores.bingScore,
     naverScore: scores.naverScore,
+    seoFoundationScore: scores.seoFoundationScore,
+    aiCitationReadinessScore: scores.aiCitationReadinessScore,
+    searchEligibility: scores.searchEligibility,
+    measurementConfidence: scores.measurementConfidence,
+    schemaEvaluationLevel: scores.schemaEvaluationLevel,
+    scoreModelVersion: scores.scoreModelVersion,
+    diagnosticScores: scores.diagnosticScores,
     summary,
     criteria,
     ruleResults,
@@ -1224,7 +1254,7 @@ export async function runAnalysis(
 
   emit?.({
     type: 'step',
-    msg: `🧮 v0.6 준비도 계산 완료 — 자체 지수: ${overall}점 | SEO: ${scores.seoFoundationScore} | AI: ${scores.aiCitationReadinessScore} | Naver: ${scores.naverScore} | Site Health: ${siteCrawl.healthScore}`,
+    msg: `🧮 v1.0-r3 증거 기반 계산 완료 — 자체 지수: ${overall}점 | 구조: ${scores.diagnosticScores.technicalStructure} | 콘텐츠: ${scores.diagnosticScores.contentExtractability} | 근거: ${scores.diagnosticScores.evidenceQuality} | 엔티티: ${scores.diagnosticScores.entityClarity}`,
     level: 'success',
     ts: now(),
   })
@@ -1359,21 +1389,16 @@ criteria는 실제 측정 근거가 있는 항목만 작성하며, 확인 불가
     result = JSON.parse(match[0])
   }
 
-  // 실측 점수로 덮어쓰기
-  result.overallScore       = overall
-  result.technicalScore     = scores.technicalScore
-  result.chatGptSearchScore = scores.chatGptSearchScore
-  result.academicGeoScore   = scores.academicGeoScore
-  result.eeatScore          = scores.eeatScore
-  result.schemaScore        = scores.schemaScore
-  result.bingScore          = scores.bingScore
-  result.naverScore         = scores.naverScore
-  result.siteCrawl          = siteCrawl
+  // 점수·판정·수정 코드는 항상 결정론적 규칙 엔진을 정본으로 사용합니다.
+  // AI 문장은 검증된 규칙 결과를 대체하지 않으며, 향후 별도 콘텐츠 생성 기능에만 사용합니다.
+  const canonical = generateRuleBasedResult(signals, scores)
+  const aiSummary = typeof result.summary === 'string' ? result.summary : undefined
+  result = { ...canonical, overallScore: overall, siteCrawl, aiSummary }
 
-  const criteriaCount = Array.isArray(result.criteria) ? result.criteria.length : 0
+  const criteriaCount = Array.isArray(canonical.criteria) ? canonical.criteria.length : 0
   emit?.({
     type: 'step',
-    msg: `✅ Gemini 분석 완료 — ${criteriaCount}개 기준 항목 생성`,
+    msg: `✅ 실측 규칙 ${criteriaCount}개 판정 완료 — AI 응답은 참고 요약으로만 분리`,
     level: 'success',
     ts: now(),
   })

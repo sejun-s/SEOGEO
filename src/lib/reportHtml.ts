@@ -34,10 +34,18 @@ export function buildReportHtml(audit: AuditResult, options: { showToolbar?: boo
     .filter(item => item.status !== 'pass')
     .sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority] || b.estimatedScoreGain - a.estimatedScoreGain)
   const strengths = (audit.criteria ?? []).filter(item => item.status === 'pass').slice(0, 6)
-  const categories = CATEGORY_META.flatMap(([key, label]) => {
+  const legacyCategories = CATEGORY_META.flatMap(([key, label]) => {
     const score = audit[key] as number | undefined
     return typeof score === 'number' ? [{ label, score }] : []
   })
+  const categories = audit.diagnosticScores ? [
+    { label: '검색 자격', score: audit.diagnosticScores.searchEligibility },
+    { label: '기술·HTML 구조', score: audit.diagnosticScores.technicalStructure },
+    { label: '콘텐츠 추출성', score: audit.diagnosticScores.contentExtractability },
+    { label: '근거·출처 품질', score: audit.diagnosticScores.evidenceQuality },
+    { label: '브랜드 엔티티', score: audit.diagnosticScores.entityClarity },
+    { label: '플랫폼 접근성', score: audit.diagnosticScores.platformAccessibility },
+  ] : legacyCategories
   const crawl = audit.siteCrawl
   const generatedAt = new Date().toLocaleString('ko-KR')
   const naverScore = typeof audit.naverScore === 'number' ? `${audit.naverScore}<small>/100</small>` : '<em>미측정</em>'
@@ -45,12 +53,18 @@ export function buildReportHtml(audit: AuditResult, options: { showToolbar?: boo
   const eligibilityLabel = audit.searchEligibility?.status === 'pass' ? '검색 자격 통과' : audit.searchEligibility?.status === 'fail' ? '검색 자격 실패' : audit.searchEligibility?.status === 'warning' ? '검색 자격 주의' : '검색 자격 확인 중'
 
   const categoryHtml = categories.map(item => `<div class="score-row"><div><b>${escapeHtml(item.label)}</b><span>${item.score}점</span></div><div class="bar"><i style="width:${item.score}%;background:${statusColor(item.score)}"></i></div></div>`).join('')
-  const issueHtml = issues.length ? issues.map((item, index) => `<article class="issue"><div class="issue-no">${String(index + 1).padStart(2, '0')}</div><div><div class="issue-head"><div><small>${escapeHtml(item.category).toUpperCase()}</small><strong>${escapeHtml(item.name)}</strong></div><span>${priorityLabel(item.priority)} · 예상 +${item.estimatedScoreGain}점</span></div><div class="finding-grid"><p><b>관찰 결과</b>${escapeHtml(item.currentState)}</p><p><b>판단 기준</b>${escapeHtml(item.scoringBasis)}</p></div><div class="action-box"><b>권고 조치</b><p>${escapeHtml(item.improvement).replace(/\n/g, '<br>')}</p></div>${item.codeSnippet ? `<div class="code-label">적용 예시</div><pre>${escapeHtml(item.codeSnippet)}</pre>` : ''}<div class="verification"><b>완료 검증</b><span>${escapeHtml(item.evaluationCriteria)}</span>${item.referenceGuide ? `<a href="${escapeHtml(item.referenceGuide)}" target="_blank" rel="noreferrer">근거 문서 ↗</a>` : ''}</div></div></article>`).join('') : '<div class="empty">주요 개선 항목이 없습니다.</div>'
+  const renderIssues = (items: CriteriaItem[], solutionLabel: string) => items.length
+    ? items.map((item, index) => `<article class="issue"><div class="issue-no">${String(index + 1).padStart(2, '0')}</div><div><div class="issue-head"><div><small>${escapeHtml(item.category).toUpperCase()}</small><strong>${escapeHtml(item.name)}</strong></div><span>${priorityLabel(item.priority)} · 내부 가중치 ${item.estimatedScoreGain}</span></div><div class="finding-grid"><p><b>관찰 결과</b>${escapeHtml(item.currentState)}</p><p><b>판단 기준</b>${escapeHtml(item.scoringBasis)}</p></div><div class="action-box"><b>권고 조치</b><p>${escapeHtml(item.improvement).replace(/\n/g, '<br>')}</p></div>${item.codeSnippet ? `<div class="code-label">${solutionLabel}</div><pre>${escapeHtml(item.codeSnippet)}</pre>` : ''}<div class="verification"><b>완료 검증</b><span>${escapeHtml(item.evaluationCriteria)}</span>${item.referenceGuide ? `<a href="${escapeHtml(item.referenceGuide)}" target="_blank" rel="noreferrer">근거 문서 ↗</a>` : ''}</div></div></article>`).join('')
+    : '<div class="empty">현재 우선 개선 항목이 없습니다.</div>'
+  const contentIssueIds = new Set(['chatgpt_content', 'geo_structure', 'geo_citation', 'eeat_depth'])
+  const contentIssues = issues.filter(item => contentIssueIds.has(item.id))
+  const structureIssues = issues.filter(item => item.category !== 'naver' && !contentIssueIds.has(item.id))
+  const naverIssues = issues.filter(item => item.category === 'naver')
   const strengthHtml = strengths.map(item => `<li><span>✓</span><div><b>${escapeHtml(item.name)}</b><small>${escapeHtml(item.currentState)}</small></div></li>`).join('')
   const crawlHtml = crawl ? `<div class="crawl-grid"><div><span>Health Score</span><b>${crawl.healthScore}</b></div><div><span>분석 페이지</span><b>${crawl.scannedPages}</b></div><div><span>정상 페이지</span><b>${crawl.healthyPages}</b></div><div><span>발견 URL</span><b>${crawl.discoveredUrls}</b></div></div><p class="note">점수 모델 ${escapeHtml(crawl.scoreModelVersion)} · robots.txt 제외 ${crawl.blockedByRobots}개 · 최대 ${crawl.limits.maxPages}페이지</p>` : '<div class="empty">사이트 전체 크롤링 데이터가 없습니다.</div>'
 
   const toolbarHtml = options.showToolbar === false ? '' : '<div class="toolbar"><button onclick="window.print()">PDF로 인쇄</button></div>'
-  const methodologyHtml = `<div class="methodology"><div><span>측정 신뢰도</span><b>${CONFIDENCE_LABEL[evidence.confidence]}</b><small>확인 근거 ${evidence.measured}/${evidence.total || '—'}</small></div><div><span>공개 근거 비율</span><b>${evidence.publicEvidenceRate}%</b><small>공식 문서·웹 표준·연구 근거</small></div><div><span>검색 자격</span><b>${eligibilityLabel}</b><small>HTTP·색인·robots 신호 기준</small></div><div><span>점수 모델</span><b>${escapeHtml(audit.scoreModelVersion ?? 'v1.0-r2')}</b><small>동일 모델로 재검사 권장</small></div></div>`
+  const methodologyHtml = `<div class="methodology"><div><span>측정 신뢰도</span><b>${CONFIDENCE_LABEL[evidence.confidence]}</b><small>확인 근거 ${evidence.measured}/${evidence.total || '—'}</small></div><div><span>공개 근거 비율</span><b>${evidence.publicEvidenceRate}%</b><small>공식 문서·웹 표준·연구 근거</small></div><div><span>검색 자격</span><b>${eligibilityLabel}</b><small>HTTP·색인·robots 신호 기준</small></div><div><span>점수 모델</span><b>${escapeHtml(audit.scoreModelVersion ?? 'v1.0-r3')}</b><small>동일 모델로 재검사 권장</small></div></div>`
 
   return `<!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(audit.title)} SEO·GEO 보고서</title>
@@ -62,10 +76,12 @@ export function buildReportHtml(audit: AuditResult, options: { showToolbar?: boo
 @media(max-width:700px){.cover,.section{padding:26px}.cover h1{font-size:25px}.summary{grid-template-columns:1fr}.summary-card{grid-column:auto}.methodology{grid-template-columns:1fr 1fr}.methodology>div{border-bottom:1px solid #e4e8ef}.finding-grid{grid-template-columns:1fr}.crawl-grid{grid-template-columns:1fr 1fr}.strengths{grid-template-columns:1fr}.issue-head{display:block}.issue-head span{display:inline-block;margin-top:7px}}
 @media print{@page{size:A4;margin:12mm}body{background:white;-webkit-print-color-adjust:exact;print-color-adjust:exact}.toolbar{display:none}.report{width:100%;margin:0;box-shadow:none;border:0;border-radius:0}.cover{min-height:220px}.issue{break-inside:avoid}.section{break-inside:auto}.methodology,.summary,.crawl-grid{break-inside:avoid}}
 </style></head><body>${toolbarHtml}<main class="report">
-<section class="cover"><small>SEOGEO · v1.0 WEBSITE READINESS REPORT</small><h1>${escapeHtml(audit.title)}</h1><p>${escapeHtml(audit.url)}</p><div class="meta"><span>분석일 ${escapeHtml(audit.lastScanned)}</span><span>보고서 생성 ${generatedAt}</span><span>점수 모델 ${escapeHtml(audit.scoreModelVersion ?? 'v1.0-r2')}</span></div></section>
+<section class="cover"><small>SEOGEO · v1.0 WEBSITE READINESS REPORT</small><h1>${escapeHtml(audit.title)}</h1><p>${escapeHtml(audit.url)}</p><div class="meta"><span>분석일 ${escapeHtml(audit.lastScanned)}</span><span>보고서 생성 ${generatedAt}</span><span>점수 모델 ${escapeHtml(audit.scoreModelVersion ?? 'v1.0-r3')}</span></div></section>
 <section class="section"><h2>핵심 요약</h2><div class="summary"><div class="hero-score"><span>SEO 기반 품질</span><b>${audit.seoFoundationScore ?? audit.overallScore}<small>/100</small></b></div><div class="hero-score ai"><span>GEO 인용 준비도</span><b>${audit.aiCitationReadinessScore ?? audit.academicGeoScore}<small>/100</small></b></div><div class="hero-score"><span>네이버 노출 기반</span><b>${naverScore}</b></div><div class="summary-card"><span>세부 영역별 점수</span>${categoryHtml}</div></div><p class="note">확인 가능한 공개 웹 신호 기반의 SEOGEO 자체 준비도 지수이며 공식 검색 순위·노출·AI 인용을 보장하지 않습니다. 측정 신뢰도: ${escapeHtml(audit.measurementConfidence ?? 'low')}.</p></section>
 <section class="section"><h2>측정 품질과 적용 범위</h2>${methodologyHtml}<p class="note">점수는 HTML, HTTP 상태, robots.txt, 메타데이터, 구조화 데이터와 내부 크롤링 결과를 사용합니다. Search Console·네이버 서치어드바이저·실제 AI 인용 데이터처럼 외부 계정이 필요한 정보는 본 점수에 임의 반영하지 않습니다.</p></section>
-<section class="section"><h2>우선 개선 과제</h2>${issueHtml}</section>
+<section class="section"><h2>구조 진단 및 HTML 수정</h2>${renderIssues(structureIssues, '바로 적용할 HTML·구조 코드')}</section>
+<section class="section"><h2>콘텐츠 진단 및 수정안</h2>${renderIssues(contentIssues, '바로 적용할 콘텐츠 템플릿')}</section>
+${naverIssues.length ? `<section class="section"><h2>네이버 노출 진단</h2>${renderIssues(naverIssues, '네이버 노출 수정 코드')}</section>` : ''}
 <section class="section"><h2>현재 강점</h2><ul class="strengths">${strengthHtml || '<li>확인된 강점이 없습니다.</li>'}</ul></section>
 <section class="section"><h2>사이트 전체 진단</h2>${crawlHtml}</section>
 <section class="footer">본 보고서의 점수는 Google 또는 AI 서비스의 공식 순위 점수가 아닙니다. 공개된 지침, 웹 표준과 현재 확인 가능한 데이터를 기반으로 개선 우선순위를 제안합니다. 실제 검색 성과는 경쟁 환경과 검색 수요에 따라 달라질 수 있습니다.</section>

@@ -133,12 +133,13 @@ function mapAIResponseToAudit(url: string, ai: AIAnalysisResponse, signals?: Pag
     ...(signals ? (() => {
       const v3 = calcCategoryScore(signals)
       return {
-        scoreModelVersion: 'v1.0-r2',
+        scoreModelVersion: 'v1.0-r3',
         legacyScore: ai.overallScore,
         searchEligibility: v3.searchEligibility,
         seoFoundationScore: v3.seoFoundationScore as number,
         aiCitationReadinessScore: v3.aiCitationReadinessScore as number,
         measurementConfidence: v3.measurementConfidence,
+        diagnosticScores: v3.diagnosticScores,
         schemaEvaluationLevel: v3.schemaEvaluationLevel,
         ruleResults: (ai as any).ruleResults,
       }

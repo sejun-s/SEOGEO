@@ -133,6 +133,14 @@ export interface AuditResult {
   seoFoundationScore?: number      // SEO Foundation 독립 점수 (0-100)
   aiCitationReadinessScore?: number // AI Citation Readiness 독립 점수 (0-100)
   measurementConfidence?: MeasurementConfidence
+  diagnosticScores?: {
+    searchEligibility: number
+    technicalStructure: number
+    contentExtractability: number
+    evidenceQuality: number
+    entityClarity: number
+    platformAccessibility: number
+  }
   ruleResults?: RuleResult[]       // 단일 원천 검사 결과 항목 목록
   schemaEvaluationLevel?: SchemaEvaluationLevel
 
@@ -259,6 +267,11 @@ export interface PageSignals {
   hasSchema: boolean
   hasHreflang: boolean
   hasSitemap: boolean
+  questionHeadingCount: number
+  statisticCount: number
+  hasAuthorSignal: boolean
+  hasDateSignal: boolean
+  schemaParseValid: boolean
   fetchError?: string
   // Analytics detection
   hasGA4: boolean

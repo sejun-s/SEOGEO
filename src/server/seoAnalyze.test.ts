@@ -26,6 +26,11 @@ function signals(overrides: Partial<PageSignals> = {}): PageSignals {
     hasSchema: false,
     jsonLdRaw: [],
     wordCount: 400,
+    questionHeadingCount: 1,
+    statisticCount: 1,
+    hasAuthorSignal: true,
+    hasDateSignal: true,
+    schemaParseValid: true,
     internalLinks: 5,
     externalLinks: 1,
     imageCount: 0,
@@ -70,5 +75,31 @@ describe('v0.6 scoring invariants', () => {
     const score = calcCategoryScore(signals({ metaRobots: 'noindex,nofollow' }))
     expect(score.searchEligibility.status).toBe('fail')
     expect(calcReadinessIndex(score, 100)).toBeLessThanOrEqual(25)
+  })
+
+  it('scores a measurable, structured page above a thin unsupported page', () => {
+    const strong = calcCategoryScore(signals({
+      h2s: ['서비스는 어떤 문제를 해결하나요?', '도입 방법'],
+      h3s: ['검증 결과'], questionHeadingCount: 1, statisticCount: 3,
+      externalLinks: 3, wordCount: 800,
+      hasSchema: true,
+      jsonLdRaw: ['{"@context":"https://schema.org","@type":"Organization","sameAs":["https://example.com/profile"]}'],
+    }))
+    const weak = calcCategoryScore(signals({
+      title: '', metaDescription: '', canonical: '', h1s: [], h2s: [], h3s: [],
+      questionHeadingCount: 0, statisticCount: 0, externalLinks: 0, internalLinks: 0,
+      wordCount: 20, hasAuthorSignal: false, hasDateSignal: false,
+    }))
+    expect(strong.diagnosticScores.technicalStructure).toBeGreaterThan(weak.diagnosticScores.technicalStructure)
+    expect(strong.diagnosticScores.contentExtractability).toBeGreaterThan(weak.diagnosticScores.contentExtractability)
+    expect(strong.diagnosticScores.evidenceQuality).toBeGreaterThan(weak.diagnosticScores.evidenceQuality)
+    expect(strong.aiCitationReadinessScore).toBeGreaterThan(weak.aiCitationReadinessScore)
+  })
+
+  it('does not invent evidence points when sources, statistics, author and date are absent', () => {
+    const score = calcCategoryScore(signals({
+      externalLinks: 0, statisticCount: 0, hasAuthorSignal: false, hasDateSignal: false,
+    }))
+    expect(score.diagnosticScores.evidenceQuality).toBe(0)
   })
 })

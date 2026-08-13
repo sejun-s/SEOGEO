@@ -17,7 +17,7 @@ const MODE_CONFIG: Record<ReadinessMode, {
   description: string
   categories: CriteriaItem['category'][]
   score: (audit: AuditResult) => number | null
-  signals: Array<{ key: keyof AuditResult; label: string }>
+  signals: Array<{ value: (audit: AuditResult) => number | undefined; label: string }>
 }> = {
   technical: {
     eyebrow: 'SEARCH FOUNDATION',
@@ -26,9 +26,9 @@ const MODE_CONFIG: Record<ReadinessMode, {
     categories: ['technical', 'schema', 'bing'],
     score: audit => audit.seoFoundationScore ?? audit.overallScore,
     signals: [
-      { key: 'technicalScore', label: '기술 SEO' },
-      { key: 'schemaScore', label: '구조화 데이터' },
-      { key: 'bingScore', label: 'Bing·IndexNow' },
+      { value: audit => audit.diagnosticScores?.searchEligibility ?? audit.technicalScore, label: '검색 자격' },
+      { value: audit => audit.diagnosticScores?.technicalStructure ?? audit.technicalScore, label: '기술·HTML 구조' },
+      { value: audit => audit.diagnosticScores?.platformAccessibility ?? audit.bingScore, label: '검색봇 접근성' },
     ],
   },
   'ai-citation': {
@@ -38,9 +38,9 @@ const MODE_CONFIG: Record<ReadinessMode, {
     categories: ['chatgpt', 'geo', 'eeat'],
     score: audit => audit.aiCitationReadinessScore ?? Math.round((audit.chatGptSearchScore + audit.academicGeoScore) / 2),
     signals: [
-      { key: 'chatGptSearchScore', label: 'AI 검색 접근' },
-      { key: 'academicGeoScore', label: '인용 구조 신호' },
-      { key: 'eeatScore', label: '콘텐츠 신뢰 신호' },
+      { value: audit => audit.diagnosticScores?.contentExtractability ?? audit.academicGeoScore, label: '콘텐츠 추출성' },
+      { value: audit => audit.diagnosticScores?.evidenceQuality ?? audit.eeatScore, label: '근거·출처 품질' },
+      { value: audit => audit.diagnosticScores?.entityClarity ?? audit.schemaScore, label: '브랜드 엔티티 명확성' },
     ],
   },
   naver: {
@@ -70,7 +70,7 @@ export function ReadinessOverview({ audit, mode }: Props) {
   const topIssue = issues[0]
   const signals = config.signals.map(signal => ({
     label: signal.label,
-    score: Number(audit[signal.key] ?? 0),
+    score: Number(signal.value(audit) ?? 0),
   }))
   const evidence = summarizeEvidence(audit.ruleResults ?? [], config.categories)
   const eligibility = audit.searchEligibility?.status ?? 'unknown'

@@ -158,6 +158,12 @@ export const FixChecklist: React.FC<Props> = ({ audit, onReanalyze, isScanning, 
           const open = expanded.has(item.id);
           const p = PRIORITY_LABEL[item.priority];
           const impactText = item.priority === 'critical' || item.priority === 'high' ? '영향도 높음' : item.priority === 'medium' ? '영향도 중간' : '영향도 낮음';
+          const contentSolutionIds = ['chatgpt_content', 'geo_structure', 'geo_citation', 'eeat_depth'];
+          const solutionType = contentSolutionIds.includes(item.id)
+            ? '콘텐츠 수정안'
+            : item.category === 'naver'
+              ? '네이버 노출 수정안'
+              : 'HTML·구조 수정안';
           return (
             <div
               key={item.id}
@@ -201,7 +207,12 @@ export const FixChecklist: React.FC<Props> = ({ audit, onReanalyze, isScanning, 
                 <div className="overflow-hidden">
                   <div className="px-3.5 pb-3 pt-0 border-t border-white/6 space-y-2">
                     <p className="text-[11px] text-slate-400 leading-relaxed whitespace-pre-line pt-2.5">{item.improvement}</p>
-                    {item.codeSnippet && <CodeSnippet code={item.codeSnippet} codeType={item.codeType} />}
+                    {item.codeSnippet && (
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-bold tracking-wide text-slate-300">{solutionType}</p>
+                        <CodeSnippet code={item.codeSnippet} codeType={item.codeType} />
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
