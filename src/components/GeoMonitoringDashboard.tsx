@@ -5,11 +5,11 @@
  * P0-3: 브랜드 동의어 온톨로지 1단계
  */
 
-import { useState, useCallback, useEffect } from 'react'
+import { Fragment, useState, useCallback, useEffect } from 'react'
 import {
   Play, Plus, Trash2, RefreshCw, ChevronDown, ChevronUp,
   AlertCircle, TrendingUp, Eye, Zap, Globe, Clock, BarChart2,
-  Link2, Repeat2, Tag, Info,
+  Link2, Repeat2, Tag, Info, Quote,
 } from 'lucide-react'
 import type { GeoEngine, GeoQuery, GeoMonitoringState, GeoAggregatedResult, GeoConfidence } from '../types'
 import {
@@ -17,6 +17,7 @@ import {
   runGeoCheck, summarizeByQuery, topCompetitors,
 } from '../lib/geoMonitorLib'
 import type { GeoStreamEvent } from '../lib/geoMonitorLib'
+import { GeoActionPanel } from './GeoActionPanel'
 
 // ── 상수 ─────────────────────────────────────────────────────────────────
 
@@ -590,8 +591,8 @@ export function GeoMonitoringDashboard() {
                         .flatMap(r => r.allCitedUrls ?? [])
                     ))
                     return (
-                      <>
-                        <tr key={row.queryId} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                      <Fragment key={row.queryId}>
+                        <tr className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
                           <td className="px-4 py-2.5 max-w-[240px]">
                             <button
                               onClick={() => setExpandedQuery(open ? null : row.queryId)}
@@ -628,22 +629,47 @@ export function GeoMonitoringDashboard() {
                         {open && (
                           <tr key={`${row.queryId}-detail`} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
                             <td colSpan={engines.length + 2} className="px-4 pb-3 pt-0">
-                              <div className="bg-slate-50 rounded-lg p-3 text-[11px] text-[#526078] space-y-2">
+                              <div className="bg-slate-50 rounded-lg p-3 text-[11px] space-y-3">
+                                {/* P1-2: 인용 컨텍스트 — bestSnippet 우선, 없으면 responsePreview */}
                                 {(latestRun.aggregated ?? [])
-                                  .filter(r => r.queryId === row.queryId && engines.includes(r.engine) && r.responsePreview)
-                                  .slice(0, 1)
-                                  .map(r => (
-                                    <div key={r.engine}>
-                                      <span className={`font-bold ${ENGINE_META[r.engine].color}`}>{ENGINE_META[r.engine].label} 응답 미리보기</span>
-                                      <p className="mt-1 text-[#1b2559] italic">"{r.responsePreview.slice(0, 200)}{r.responsePreview.length > 200 ? '…' : ''}"</p>
-                                    </div>
-                                  ))
+                                  .filter(r => r.queryId === row.queryId && engines.includes(r.engine))
+                                  .filter(r => r.bestSnippet || r.responsePreview)
+                                  .slice(0, 2)
+                                  .map(r => {
+                                    const hasCited = r.citationRate > 0
+                                    return (
+                                      <div key={r.engine}>
+                                        <div className="flex items-center gap-2 mb-1.5">
+                                          <span className={`text-[10px] font-bold ${ENGINE_META[r.engine].color}`}>
+                                            {ENGINE_META[r.engine].label}
+                                          </span>
+                                          {hasCited && r.bestSnippet && (
+                                            <span className="flex items-center gap-0.5 text-[9px] text-emerald-600 font-semibold bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full">
+                                              <Quote className="w-2.5 h-2.5" /> 인용 문맥
+                                            </span>
+                                          )}
+                                        </div>
+                                        {/* 인용 문맥이 있으면 강조, 없으면 응답 미리보기 */}
+                                        {hasCited && r.bestSnippet ? (
+                                          <blockquote className="border-l-2 border-emerald-400 pl-3 py-1 bg-white rounded-r-lg">
+                                            <p className="text-[#1b2559] leading-relaxed italic">
+                                              "…{r.bestSnippet}…"
+                                            </p>
+                                          </blockquote>
+                                        ) : r.responsePreview ? (
+                                          <p className="text-[#737c9c] italic leading-relaxed">
+                                            "{r.responsePreview.slice(0, 180)}{r.responsePreview.length > 180 ? '…' : ''}"
+                                          </p>
+                                        ) : null}
+                                      </div>
+                                    )
+                                  })
                                 }
                               </div>
                             </td>
                           </tr>
                         )}
-                      </>
+                      </Fragment>
                     )
                   })}
                 </tbody>
@@ -681,6 +707,9 @@ export function GeoMonitoringDashboard() {
               </div>
             </div>
           )}
+
+          {/* P1-3: GEO 개선 액션 플랜 */}
+          <GeoActionPanel run={latestRun} />
         </div>
       )}
 

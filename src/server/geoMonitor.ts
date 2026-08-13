@@ -362,6 +362,9 @@ async function runWithRepeat(
     new Set(runs.flatMap(r => r.competitorMentions))
   ).slice(0, 5)
 
+  // P1-2: 가장 잘 인용된 run의 snippet 선택
+  const bestSnippet = citedRuns.find(r => r.citationSnippet)?.citationSnippet
+
   return {
     queryId        : query.id,
     queryText      : query.text,
@@ -373,6 +376,7 @@ async function runWithRepeat(
     allCitedUrls,
     competitorMentions: allCompetitors,
     responsePreview : runs[0]?.responsePreview ?? '',
+    bestSnippet,
     error           : errored.length === runs.length ? runs[0]?.error : undefined,
   }
 }

@@ -419,6 +419,8 @@ export interface GeoAggregatedResult {
   competitorMentions: string[];
   /** 대표 응답 미리보기 */
   responsePreview: string;
+  /** P1-2: 인용 컨텍스트 — 브랜드 언급 전후 문맥 (±130자) */
+  bestSnippet?: string;
   error?: string;
 }
 
