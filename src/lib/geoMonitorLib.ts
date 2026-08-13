@@ -1,11 +1,15 @@
 /**
- * GEO 모니터링 — 클라이언트 사이드 API 호출 및 localStorage 관리
+ * GEO 모니터링 — 클라이언트 사이드 API 호출 및 localStorage 관리 (v2)
+ *
+ * P0-1: citedUrls 처리 (Perplexity citations[])
+ * P0-2: repeatCount 파라미터 + GeoAggregatedResult 집계
+ * P0-3: brandSynonyms 등록 및 전달
  */
 
 import type {
   GeoEngine,
   GeoQuery,
-  GeoCheckResult,
+  GeoAggregatedResult,
   GeoMonitoringRun,
   GeoMonitoringState,
 } from '../types'
@@ -14,26 +18,40 @@ const STORAGE_KEY = 'geo-monitoring-state'
 
 // ── localStorage 헬퍼 ───────────────────────────────────────────────────────
 
+const DEFAULT_STATE: GeoMonitoringState = {
+  targetDomain : '',
+  targetBrand  : '',
+  brandSynonyms: [],
+  repeatCount  : 1,
+  queries      : [],
+  runs         : [],
+}
+
 export function loadGeoState(): GeoMonitoringState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    return raw
-      ? (JSON.parse(raw) as GeoMonitoringState)
-      : { targetDomain: '', targetBrand: '', queries: [], runs: [] }
+    if (!raw) return { ...DEFAULT_STATE }
+    const parsed = JSON.parse(raw) as Partial<GeoMonitoringState>
+    // 이전 버전 마이그레이션: 없는 필드 기본값으로 채우기
+    return {
+      ...DEFAULT_STATE,
+      ...parsed,
+      brandSynonyms: parsed.brandSynonyms ?? [],
+      repeatCount  : (parsed.repeatCount as 1 | 3 | 5) ?? 1,
+    }
   } catch {
-    return { targetDomain: '', targetBrand: '', queries: [], runs: [] }
+    return { ...DEFAULT_STATE }
   }
 }
 
 export function saveGeoState(state: GeoMonitoringState): void {
   try {
-    // 최근 30회 실행만 보관
     const trimmed = { ...state, runs: state.runs.slice(0, 30) }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed))
   } catch { /* quota */ }
 }
 
-// ── GEO 모니터링 실행 ───────────────────────────────────────────────────────
+// ── 스트리밍 이벤트 타입 ────────────────────────────────────────────────────
 
 export type GeoProgressEvent = {
   type  : 'geo-progress'
@@ -47,20 +65,27 @@ export type GeoProgressEvent = {
 
 export type GeoResultEvent = {
   type               : 'geo-result'
-  results            : GeoCheckResult[]
-  citationRates      : Record<GeoEngine, number>
+  aggregated         : GeoAggregatedResult[]
+  citationRates      : Partial<Record<GeoEngine, number>>
   overallCitationRate: number
   ts                 : number
 }
 
-export type GeoStreamEvent = GeoProgressEvent | GeoResultEvent | { type: 'error'; msg: string; ts: number }
+export type GeoStreamEvent =
+  | GeoProgressEvent
+  | GeoResultEvent
+  | { type: 'error'; msg: string; ts: number }
+
+// ── GEO 모니터링 실행 ───────────────────────────────────────────────────────
 
 export async function runGeoCheck(
   params: {
-    targetDomain: string
-    targetBrand : string
-    queries     : GeoQuery[]
-    engines     : GeoEngine[]
+    targetDomain  : string
+    targetBrand   : string
+    brandSynonyms : string[]
+    queries       : GeoQuery[]
+    engines       : GeoEngine[]
+    repeatCount   : number
   },
   onEvent?: (e: GeoStreamEvent) => void,
 ): Promise<GeoMonitoringRun> {
@@ -111,8 +136,10 @@ export async function runGeoCheck(
           id                 : `run_${Date.now()}`,
           targetDomain       : params.targetDomain,
           targetBrand        : params.targetBrand,
+          brandSynonyms      : params.brandSynonyms,
+          repeatCount        : params.repeatCount,
           runAt              : new Date().toISOString(),
-          results            : e.results,
+          aggregated         : e.aggregated,
           citationRates      : e.citationRates,
           overallCitationRate: e.overallCitationRate,
         }
@@ -126,60 +153,42 @@ export async function runGeoCheck(
 
 // ── 통계 헬퍼 ───────────────────────────────────────────────────────────────
 
-/** 엔진별·전체 인용률 계산 (클라이언트 사이드 버전) */
-export function calcCitationRates(
-  results : GeoCheckResult[],
-  engines : GeoEngine[],
-): { rates: Record<GeoEngine, number>; overall: number } {
-  const rates = {} as Record<GeoEngine, number>
-
-  for (const engine of engines) {
-    const engineResults = results.filter(r => r.engine === engine && !r.error)
-    rates[engine] = engineResults.length > 0
-      ? Math.round((engineResults.filter(r => r.cited).length / engineResults.length) * 100)
-      : 0
-  }
-
-  const valid   = results.filter(r => !r.error)
-  const overall = valid.length > 0
-    ? Math.round((valid.filter(r => r.cited).length / valid.length) * 100)
-    : 0
-
-  return { rates, overall }
-}
-
-/** 질의별 인용 요약 */
-export function summarizeByQuery(results: GeoCheckResult[]): Array<{
-  queryId   : string
-  queryText : string
-  citedCount: number
-  totalCount: number
-  engines   : Partial<Record<GeoEngine, { cited: boolean; error?: string }>>
+/** 질의별 집계 요약 */
+export function summarizeByQuery(aggregated: GeoAggregatedResult[]): Array<{
+  queryId        : string
+  queryText      : string
+  avgCitationRate: number
+  engines        : Partial<Record<GeoEngine, { rate: number; confidence: string; error?: string }>>
 }> {
   const map = new Map<string, {
-    queryText : string
-    citedCount: number
-    totalCount: number
-    engines   : Partial<Record<GeoEngine, { cited: boolean; error?: string }>>
+    queryText      : string
+    total          : number
+    rateSum        : number
+    engines        : Partial<Record<GeoEngine, { rate: number; confidence: string; error?: string }>>
   }>()
 
-  for (const r of results) {
+  for (const r of aggregated) {
     if (!map.has(r.queryId)) {
-      map.set(r.queryId, { queryText: r.queryText, citedCount: 0, totalCount: 0, engines: {} })
+      map.set(r.queryId, { queryText: r.queryText, total: 0, rateSum: 0, engines: {} })
     }
     const entry = map.get(r.queryId)!
-    entry.totalCount++
-    if (r.cited) entry.citedCount++
-    entry.engines[r.engine] = { cited: r.cited, error: r.error }
+    entry.total++
+    entry.rateSum += r.citationRate
+    entry.engines[r.engine] = { rate: r.citationRate, confidence: r.confidence, error: r.error }
   }
 
-  return Array.from(map.entries()).map(([queryId, v]) => ({ queryId, ...v }))
+  return Array.from(map.entries()).map(([queryId, v]) => ({
+    queryId,
+    queryText      : v.queryText,
+    avgCitationRate: v.total > 0 ? Math.round(v.rateSum / v.total) : 0,
+    engines        : v.engines,
+  }))
 }
 
 /** 가장 많이 나타난 경쟁 도메인 Top 5 */
-export function topCompetitors(results: GeoCheckResult[]): Array<{ domain: string; count: number }> {
+export function topCompetitors(aggregated: GeoAggregatedResult[]): Array<{ domain: string; count: number }> {
   const counter = new Map<string, number>()
-  for (const r of results) {
+  for (const r of aggregated) {
     for (const d of r.competitorMentions ?? []) {
       counter.set(d, (counter.get(d) ?? 0) + 1)
     }

@@ -373,6 +373,9 @@ export type GeoEngine = 'perplexity' | 'chatgpt' | 'claude' | 'gemini';
 
 export type GeoQueryCategory = 'brand' | 'product' | 'industry' | 'competitor';
 
+/** 통계 신뢰도: 반복 횟수 기반 */
+export type GeoConfidence = 'low' | 'medium' | 'high';
+
 export interface GeoQuery {
   id: string;
   text: string;                   // 질의 원문
@@ -381,27 +384,56 @@ export interface GeoQuery {
   targetAudience?: string;        // 대상 독자
 }
 
+/** P0-1: Perplexity citations[] + P0-2: 반복 실행 통계 */
 export interface GeoCheckResult {
   queryId: string;
   queryText: string;
   engine: GeoEngine;
-  cited: boolean;                 // 도메인/브랜드 인용 여부
-  mentionCount: number;           // 응답 내 언급 횟수
-  citationSnippet?: string;       // 인용된 전후 문맥 (±100자)
-  competitorMentions: string[];   // 경쟁 도메인 언급 목록
-  responsePreview: string;        // 응답 첫 300자
-  checkedAt: string;              // ISO timestamp
-  error?: string;                 // 엔진 오류 시
+  // 단일 실행 결과
+  cited: boolean;
+  mentionCount: number;
+  citationSnippet?: string;
+  /** P0-1: Perplexity API citations[] 에서 추출한 실제 인용 URL */
+  citedUrls: string[];
+  competitorMentions: string[];
+  responsePreview: string;
+  checkedAt: string;
+  error?: string;
+}
+
+/** P0-2: 반복 실행 집계 결과 */
+export interface GeoAggregatedResult {
+  queryId: string;
+  queryText: string;
+  engine: GeoEngine;
+  /** 반복 실행 횟수 */
+  repeatCount: number;
+  /** 인용된 횟수 */
+  citedCount: number;
+  /** 인용률 0~100 */
+  citationRate: number;
+  /** 통계 신뢰도 */
+  confidence: GeoConfidence;
+  /** 인용된 실제 URL 목록 (중복 제거) */
+  allCitedUrls: string[];
+  competitorMentions: string[];
+  /** 대표 응답 미리보기 */
+  responsePreview: string;
+  error?: string;
 }
 
 export interface GeoMonitoringRun {
   id: string;
   targetDomain: string;
   targetBrand: string;
+  /** P0-3: 브랜드 동의어 */
+  brandSynonyms: string[];
+  repeatCount: number;
   runAt: string;
-  results: GeoCheckResult[];
-  /** 엔진별 인용률 (0~100%) */
-  citationRates: Record<GeoEngine, number>;
+  /** 집계 결과 (쿼리 × 엔진) */
+  aggregated: GeoAggregatedResult[];
+  /** 엔진별 평균 인용률 (0~100%) */
+  citationRates: Partial<Record<GeoEngine, number>>;
   /** 전체 평균 인용률 */
   overallCitationRate: number;
 }
@@ -409,6 +441,10 @@ export interface GeoMonitoringRun {
 export interface GeoMonitoringState {
   targetDomain: string;
   targetBrand: string;
+  /** P0-3: 브랜드 동의어 (온톨로지 1단계) */
+  brandSynonyms: string[];
+  /** 반복 실행 횟수 (1 | 3 | 5) */
+  repeatCount: 1 | 3 | 5;
   queries: GeoQuery[];
-  runs: GeoMonitoringRun[];       // 최신순 정렬
+  runs: GeoMonitoringRun[];
 }

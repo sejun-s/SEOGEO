@@ -1,15 +1,17 @@
 /**
- * GEO Monitoring Dashboard (Module C)
- * AI 인용률 실측 대시보드
+ * GEO Monitoring Dashboard (Module C) — v2
+ * P0-1: Perplexity citations[] URL 표시
+ * P0-2: 반복 실행 (1/3/5회) + 인용률 % + 신뢰도
+ * P0-3: 브랜드 동의어 온톨로지 1단계
  */
 
 import { useState, useCallback, useEffect } from 'react'
 import {
   Play, Plus, Trash2, RefreshCw, ChevronDown, ChevronUp,
-  CheckCircle2, XCircle, AlertCircle, TrendingUp, Eye,
-  Zap, Globe, Clock, BarChart2,
+  AlertCircle, TrendingUp, Eye, Zap, Globe, Clock, BarChart2,
+  Link2, Repeat2, Tag, Info,
 } from 'lucide-react'
-import type { GeoEngine, GeoQuery, GeoMonitoringState } from '../types'
+import type { GeoEngine, GeoQuery, GeoMonitoringState, GeoAggregatedResult, GeoConfidence } from '../types'
 import {
   loadGeoState, saveGeoState,
   runGeoCheck, summarizeByQuery, topCompetitors,
@@ -34,18 +36,76 @@ const CATEGORY_LABELS: Record<GeoQuery['category'], string> = {
   competitor: '경쟁사',
 }
 
-// ── 서브 컴포넌트 ─────────────────────────────────────────────────────────
+const REPEAT_OPTIONS: { value: 1 | 3 | 5; label: string; desc: string }[] = [
+  { value: 1, label: '1회',  desc: '빠른 단발 측정' },
+  { value: 3, label: '3회',  desc: '통계 신뢰도 중간' },
+  { value: 5, label: '5회',  desc: '통계 신뢰도 높음' },
+]
 
-function CitationBadge({ cited, error }: { cited: boolean; error?: string }) {
+// ── P0-2: 인용률 셀 (% + 신뢰도) ─────────────────────────────────────────
+
+function RateCell({
+  rate, confidence, error,
+}: {
+  rate      : number
+  confidence: GeoConfidence
+  error?    : string
+}) {
   if (error) return (
-    <span className="flex items-center gap-1 text-[10px] text-[#737c9c]">
+    <span className="flex items-center justify-center gap-0.5 text-[10px] text-[#737c9c]">
       <AlertCircle className="w-3 h-3" /> 오류
     </span>
   )
-  return cited
-    ? <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-    : <XCircle     className="w-4 h-4 text-slate-300" />
+
+  const textColor =
+    rate >= 60 ? 'text-emerald-600' :
+    rate >= 30 ? 'text-amber-600' :
+    rate > 0   ? 'text-rose-500' :
+                 'text-slate-300'
+
+  const confDot =
+    confidence === 'high'   ? 'bg-emerald-400' :
+    confidence === 'medium' ? 'bg-amber-400' :
+                              'bg-slate-300'
+
+  return (
+    <div className="flex flex-col items-center gap-0.5">
+      <span className={`text-sm font-black font-mono ${textColor}`}>{rate}%</span>
+      <span
+        title={`신뢰도: ${confidence}`}
+        className={`w-1.5 h-1.5 rounded-full ${confDot}`}
+      />
+    </div>
+  )
 }
+
+// ── P0-1: 인용 URL 뱃지 ───────────────────────────────────────────────────
+
+function CitedUrlBadge({ urls }: { urls: string[] }) {
+  if (!urls || urls.length === 0) return null
+  return (
+    <div className="mt-1 flex flex-wrap gap-1">
+      {urls.slice(0, 3).map((url, i) => (
+        <a
+          key={i}
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={url}
+          className="inline-flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded bg-teal-50 border border-teal-200 text-teal-700 hover:bg-teal-100 transition-colors truncate max-w-[120px]"
+        >
+          <Link2 className="w-2 h-2 shrink-0" />
+          {new URL(url).hostname.replace('www.', '')}
+        </a>
+      ))}
+      {urls.length > 3 && (
+        <span className="text-[9px] text-[#737c9c]">+{urls.length - 3}</span>
+      )}
+    </div>
+  )
+}
+
+// ── 엔진 인용률 카드 ───────────────────────────────────────────────────────
 
 function EngineRateCard({
   engine, rate, available,
@@ -58,7 +118,7 @@ function EngineRateCard({
       <div className={`text-[11px] font-bold mb-1 ${m.color}`}>{m.label}</div>
       {available ? (
         <>
-          <div className={`text-xl font-black font-mono ${m.color}`}>{rate}%</div>
+          <div className={`text-xl font-black font-mono ${m.color}`}>{rate}<span className="text-sm font-normal">%</span></div>
           <div className="h-1.5 bg-white/60 rounded-full mt-1.5 overflow-hidden">
             <div className={`h-full ${bar} rounded-full transition-all duration-700`} style={{ width: `${rate}%` }} />
           </div>
@@ -70,38 +130,103 @@ function EngineRateCard({
   )
 }
 
+// ── P0-3: 브랜드 동의어 입력 ─────────────────────────────────────────────
+
+function SynonymsEditor({
+  synonyms,
+  onChange,
+}: {
+  synonyms: string[]
+  onChange: (s: string[]) => void
+}) {
+  const [input, setInput] = useState('')
+
+  const add = () => {
+    const t = input.trim()
+    if (!t || synonyms.includes(t)) return
+    onChange([...synonyms, t])
+    setInput('')
+  }
+
+  return (
+    <div>
+      <label className="text-[11px] font-semibold text-[#526078] mb-1.5 flex items-center gap-1.5">
+        <Tag className="w-3 h-3" />
+        브랜드 동의어
+        <span
+          title="브랜드를 다르게 부르는 이름들을 등록하면 AI 응답에서 더 정확하게 감지됩니다 (온톨로지 1단계)"
+          className="cursor-help"
+        >
+          <Info className="w-3 h-3 text-[#737c9c]" />
+        </span>
+      </label>
+
+      {/* 등록된 동의어 칩 */}
+      {synonyms.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-2">
+          {synonyms.map((s, i) => (
+            <span
+              key={i}
+              className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-full bg-violet-50 border border-violet-200 text-violet-700 font-medium"
+            >
+              {s}
+              <button
+                onClick={() => onChange(synonyms.filter((_, idx) => idx !== i))}
+                className="text-violet-400 hover:text-violet-600"
+              >✕</button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* 입력 */}
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && add()}
+          placeholder="예: 퓨어텍, PureTech Korea"
+          className="flex-1 text-sm px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-[#1b2559] placeholder-slate-400 focus:outline-none focus:border-[#4f6df5]"
+        />
+        <button
+          onClick={add}
+          disabled={!input.trim()}
+          className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-violet-500 text-white text-[11px] font-bold disabled:opacity-40 hover:bg-violet-600 transition-colors"
+        >
+          <Plus className="w-3.5 h-3.5" /> 추가
+        </button>
+      </div>
+      <p className="text-[10px] text-[#737c9c] mt-1">
+        동의어 등록 시 감지 정확도가 2~3배 향상됩니다
+      </p>
+    </div>
+  )
+}
+
 // ── 쿼리 편집기 ──────────────────────────────────────────────────────────
 
 function QueryEditor({
   queries,
   onChange,
 }: {
-  queries: GeoQuery[]
+  queries : GeoQuery[]
   onChange: (queries: GeoQuery[]) => void
 }) {
-  const [newText, setNewText]       = useState('')
+  const [newText, setNewText]         = useState('')
   const [newCategory, setNewCategory] = useState<GeoQuery['category']>('brand')
 
   const add = () => {
     const t = newText.trim()
     if (!t) return
-    onChange([
-      ...queries,
-      { id: `q_${Date.now()}`, text: t, synonyms: [], category: newCategory },
-    ])
+    onChange([...queries, { id: `q_${Date.now()}`, text: t, synonyms: [], category: newCategory }])
     setNewText('')
   }
 
-  const remove = (id: string) => onChange(queries.filter(q => q.id !== id))
-
   return (
     <div className="space-y-2">
-      {/* 기존 질의 목록 */}
       {queries.map(q => (
-        <div
-          key={q.id}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-slate-200 text-sm"
-        >
+        <div key={q.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-slate-200 text-sm">
           <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
             q.category === 'brand'      ? 'bg-violet-50 border-violet-200 text-violet-700' :
             q.category === 'product'    ? 'bg-blue-50 border-blue-200 text-blue-700' :
@@ -112,7 +237,7 @@ function QueryEditor({
           </span>
           <span className="flex-1 text-[#1b2559] truncate">{q.text}</span>
           <button
-            onClick={() => remove(q.id)}
+            onClick={() => onChange(queries.filter(x => x.id !== q.id))}
             className="text-slate-300 hover:text-rose-500 transition-colors"
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -120,7 +245,6 @@ function QueryEditor({
         </div>
       ))}
 
-      {/* 새 질의 추가 */}
       <div className="flex gap-2">
         <select
           value={newCategory}
@@ -154,26 +278,22 @@ function QueryEditor({
 // ── 메인 대시보드 ─────────────────────────────────────────────────────────
 
 export function GeoMonitoringDashboard() {
-  const [state, setState]           = useState<GeoMonitoringState>(loadGeoState)
-  const [engines, setEngines]       = useState<GeoEngine[]>(['perplexity', 'claude'])
-  const [isRunning, setIsRunning]   = useState(false)
-  const [progress, setProgress]     = useState<{ done: number; total: number; engine: string; query: string } | null>(null)
-  const [error, setError]           = useState<string | null>(null)
-  const [expandedRun, setExpandedRun] = useState<string | null>(null)
+  const [state, setState]               = useState<GeoMonitoringState>(loadGeoState)
+  const [engines, setEngines]           = useState<GeoEngine[]>(['perplexity', 'claude'])
+  const [isRunning, setIsRunning]       = useState(false)
+  const [progress, setProgress]         = useState<{ done: number; total: number; engine: string; query: string } | null>(null)
+  const [error, setError]               = useState<string | null>(null)
+  const [expandedRun, setExpandedRun]   = useState<string | null>(null)
+  const [expandedQuery, setExpandedQuery] = useState<string | null>(null)
 
-  // state 변경 시 저장
   useEffect(() => { saveGeoState(state) }, [state])
 
-  // 현재 설정 업데이트 헬퍼
   const update = useCallback((patch: Partial<GeoMonitoringState>) => {
     setState(prev => ({ ...prev, ...patch }))
   }, [])
 
-  const toggleEngine = (engine: GeoEngine) => {
-    setEngines(prev =>
-      prev.includes(engine) ? prev.filter(e => e !== engine) : [...prev, engine]
-    )
-  }
+  const toggleEngine = (engine: GeoEngine) =>
+    setEngines(prev => prev.includes(engine) ? prev.filter(e => e !== engine) : [...prev, engine])
 
   const handleRun = async () => {
     if (!state.targetDomain || !state.targetBrand) {
@@ -196,10 +316,12 @@ export function GeoMonitoringDashboard() {
     try {
       const run = await runGeoCheck(
         {
-          targetDomain: state.targetDomain,
-          targetBrand : state.targetBrand,
-          queries     : state.queries,
+          targetDomain  : state.targetDomain,
+          targetBrand   : state.targetBrand,
+          brandSynonyms : state.brandSynonyms,
+          queries       : state.queries,
           engines,
+          repeatCount   : state.repeatCount,
         },
         (e: GeoStreamEvent) => {
           if (e.type === 'geo-progress') {
@@ -207,11 +329,7 @@ export function GeoMonitoringDashboard() {
           }
         },
       )
-
-      setState(prev => ({
-        ...prev,
-        runs: [run, ...prev.runs].slice(0, 30),
-      }))
+      setState(prev => ({ ...prev, runs: [run, ...prev.runs].slice(0, 30) }))
       setExpandedRun(run.id)
     } catch (err) {
       setError(String(err))
@@ -222,6 +340,8 @@ export function GeoMonitoringDashboard() {
   }
 
   const latestRun = state.runs[0]
+  const latestSummary = latestRun ? summarizeByQuery(latestRun.aggregated ?? []) : []
+  const latestCompetitors = latestRun ? topCompetitors(latestRun.aggregated ?? []) : []
 
   return (
     <div className="space-y-5 animate-fadeIn">
@@ -245,6 +365,11 @@ export function GeoMonitoringDashboard() {
                 <span className="text-sm font-normal text-[#737c9c]">%</span>
               </div>
               <div className="text-[11px] text-[#737c9c] mt-0.5">전체 인용률</div>
+              {latestRun.repeatCount > 1 && (
+                <div className="text-[10px] text-[#4f6df5] mt-0.5 font-medium">
+                  {latestRun.repeatCount}회 반복 평균
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -281,51 +406,83 @@ export function GeoMonitoringDashboard() {
           </div>
         </div>
 
-        {/* AI 엔진 선택 */}
-        <div>
-          <label className="text-[11px] font-semibold text-[#526078] mb-2 block">AI 엔진 선택</label>
-          <div className="flex flex-wrap gap-2">
-            {ALL_ENGINES.map(engine => {
-              const m       = ENGINE_META[engine]
-              const checked = engines.includes(engine)
-              return (
+        {/* P0-3: 브랜드 동의어 */}
+        <SynonymsEditor
+          synonyms={state.brandSynonyms}
+          onChange={brandSynonyms => update({ brandSynonyms })}
+        />
+
+        {/* AI 엔진 + P0-2: 반복 횟수 */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* 엔진 선택 */}
+          <div>
+            <label className="text-[11px] font-semibold text-[#526078] mb-2 block">AI 엔진 선택</label>
+            <div className="flex flex-wrap gap-2">
+              {ALL_ENGINES.map(engine => {
+                const m       = ENGINE_META[engine]
+                const checked = engines.includes(engine)
+                return (
+                  <button
+                    key={engine}
+                    onClick={() => toggleEngine(engine)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-bold transition-all ${
+                      checked
+                        ? `${m.border} ${m.bg} ${m.color}`
+                        : 'border-slate-200 bg-white text-slate-400'
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${checked ? 'bg-current' : 'bg-slate-300'}`} />
+                    {m.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* P0-2: 반복 횟수 */}
+          <div>
+            <label className="text-[11px] font-semibold text-[#526078] mb-2 flex items-center gap-1.5">
+              <Repeat2 className="w-3 h-3" /> 반복 실행 횟수
+            </label>
+            <div className="flex gap-2">
+              {REPEAT_OPTIONS.map(opt => (
                 <button
-                  key={engine}
-                  onClick={() => toggleEngine(engine)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[11px] font-bold transition-all ${
-                    checked
-                      ? `${m.border} ${m.bg} ${m.color}`
-                      : 'border-slate-200 bg-white text-slate-400'
+                  key={opt.value}
+                  onClick={() => update({ repeatCount: opt.value })}
+                  title={opt.desc}
+                  className={`flex-1 py-1.5 rounded-lg border text-[11px] font-bold transition-all ${
+                    state.repeatCount === opt.value
+                      ? 'border-[#4f6df5] bg-[#eef3ff] text-[#4f6df5]'
+                      : 'border-slate-200 bg-white text-slate-400 hover:border-slate-300'
                   }`}
                 >
-                  <span className={`w-2 h-2 rounded-full ${checked ? 'bg-current' : 'bg-slate-300'}`} />
-                  {m.label}
+                  {opt.label}
                 </button>
-              )
-            })}
+              ))}
+            </div>
+            <p className="text-[10px] text-[#737c9c] mt-1">
+              {state.repeatCount === 1 ? '단발 측정 — 빠르지만 LLM 비결정성 영향 큼' :
+               state.repeatCount === 3 ? '3회 평균 — 균형잡힌 신뢰도' :
+               '5회 평균 — 높은 통계 신뢰도'}
+            </p>
           </div>
-          <p className="text-[10px] text-[#737c9c] mt-1.5">
-            ※ 각 엔진은 서버 환경변수(PPLX_API_KEY, OPENAI_API_KEY 등)가 설정된 경우만 작동합니다.
-            Claude는 기본 포함됩니다.
-          </p>
         </div>
+
+        <p className="text-[10px] text-[#737c9c]">
+          ※ 각 엔진은 서버 환경변수(PPLX_API_KEY, OPENAI_API_KEY 등)가 설정된 경우만 작동합니다.
+        </p>
       </div>
 
       {/* ── 질의 패널 ── */}
       <div className="glass-card p-5 space-y-3">
         <div className="flex items-center gap-2">
           <Zap className="w-4 h-4 text-amber-600" />
-          <span className="text-sm font-bold text-[#1b2559]">
-            질의 패널 ({state.queries.length}개)
-          </span>
+          <span className="text-sm font-bold text-[#1b2559]">질의 패널 ({state.queries.length}개)</span>
         </div>
-        <QueryEditor
-          queries={state.queries}
-          onChange={queries => update({ queries })}
-        />
+        <QueryEditor queries={state.queries} onChange={queries => update({ queries })} />
       </div>
 
-      {/* ── 실행 버튼 ── */}
+      {/* ── 오류 + 진행 상태 ── */}
       {error && (
         <div className="px-4 py-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-sm flex items-center gap-2">
           <AlertCircle className="w-4 h-4 shrink-0" />
@@ -339,11 +496,9 @@ export function GeoMonitoringDashboard() {
           <div className="flex items-center justify-between text-sm">
             <span className="font-semibold text-[#1b2559] flex items-center gap-2">
               <RefreshCw className="w-4 h-4 animate-spin text-[#4f6df5]" />
-              AI 엔진에 질의 중...
+              AI 엔진에 질의 중 {state.repeatCount > 1 ? `(각 ${state.repeatCount}회 반복)` : ''}…
             </span>
-            <span className="font-mono text-[#526078] text-xs">
-              {progress.done}/{progress.total}
-            </span>
+            <span className="font-mono text-[#526078] text-xs">{progress.done}/{progress.total}</span>
           </div>
           <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
             <div
@@ -362,13 +517,14 @@ export function GeoMonitoringDashboard() {
         </div>
       )}
 
+      {/* ── 실행 버튼 ── */}
       <button
         onClick={handleRun}
         disabled={isRunning}
         className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-[#4f6df5] text-white font-bold text-sm hover:bg-[#354fce] disabled:opacity-50 transition-colors shadow-lg"
       >
         {isRunning
-          ? <><RefreshCw className="w-4 h-4 animate-spin" /> 모니터링 실행 중...</>
+          ? <><RefreshCw className="w-4 h-4 animate-spin" /> 모니터링 실행 중…</>
           : <><Play className="w-4 h-4" /> AI 인용률 측정 시작</>
         }
       </button>
@@ -376,9 +532,15 @@ export function GeoMonitoringDashboard() {
       {/* ── 최신 결과 ── */}
       {latestRun && (
         <div className="space-y-4">
+
           {/* 엔진별 인용률 카드 */}
           <div>
-            <div className="text-[11px] font-semibold text-[#526078] uppercase tracking-wider mb-2">엔진별 인용률</div>
+            <div className="text-[11px] font-semibold text-[#526078] uppercase tracking-wider mb-2">
+              엔진별 인용률
+              {latestRun.repeatCount > 1 && (
+                <span className="ml-2 normal-case font-normal text-[#4f6df5]">({latestRun.repeatCount}회 평균)</span>
+              )}
+            </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {ALL_ENGINES.map(engine => (
                 <EngineRateCard
@@ -396,6 +558,11 @@ export function GeoMonitoringDashboard() {
             <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
               <Eye className="w-4 h-4 text-[#4f6df5]" />
               <span className="text-sm font-bold text-[#1b2559]">질의별 인용 현황</span>
+              {latestRun.repeatCount > 1 && (
+                <span className="text-[10px] text-[#4f6df5] font-medium">
+                  {latestRun.repeatCount}회 반복 · 신뢰도: 점 색상
+                </span>
+              )}
               <span className="text-[10px] text-[#737c9c] ml-auto">
                 {new Date(latestRun.runAt).toLocaleString('ko-KR')}
               </span>
@@ -410,55 +577,99 @@ export function GeoMonitoringDashboard() {
                         {ENGINE_META[e].label}
                       </th>
                     ))}
-                    <th className="px-3 py-2 text-[11px] font-bold text-center text-[#526078]">인용률</th>
+                    <th className="px-3 py-2 text-[11px] font-bold text-center text-[#526078]">평균</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {summarizeByQuery(latestRun.results).map((row, i) => (
-                    <tr key={row.queryId} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                      <td className="px-4 py-2.5 text-[#1b2559] text-xs leading-snug max-w-[240px]">
-                        <div className="truncate" title={row.queryText}>{row.queryText}</div>
-                      </td>
-                      {engines.map(engine => {
-                        const info = row.engines[engine]
-                        return (
-                          <td key={engine} className="px-3 py-2 text-center">
-                            {info
-                              ? <CitationBadge cited={info.cited} error={info.error} />
-                              : <span className="text-slate-300">—</span>
-                            }
+                  {latestSummary.map((row, i) => {
+                    const open = expandedQuery === row.queryId
+                    // P0-1: citedUrls 수집 for this query
+                    const citedUrls = Array.from(new Set(
+                      (latestRun.aggregated ?? [])
+                        .filter(r => r.queryId === row.queryId)
+                        .flatMap(r => r.allCitedUrls ?? [])
+                    ))
+                    return (
+                      <>
+                        <tr key={row.queryId} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                          <td className="px-4 py-2.5 max-w-[240px]">
+                            <button
+                              onClick={() => setExpandedQuery(open ? null : row.queryId)}
+                              className="text-xs text-left text-[#1b2559] hover:text-[#4f6df5] transition-colors"
+                            >
+                              {open ? <ChevronUp className="w-3 h-3 inline mr-1" /> : <ChevronDown className="w-3 h-3 inline mr-1" />}
+                              <span className="truncate">{row.queryText}</span>
+                            </button>
+                            {/* P0-1: 인용 URL (Perplexity 전용) */}
+                            {citedUrls.length > 0 && <CitedUrlBadge urls={citedUrls} />}
                           </td>
-                        )
-                      })}
-                      <td className="px-3 py-2 text-center">
-                        <span className={`text-xs font-bold font-mono ${
-                          row.citedCount / row.totalCount >= 0.6
-                            ? 'text-emerald-600'
-                            : row.citedCount > 0
-                            ? 'text-amber-600'
-                            : 'text-slate-400'
-                        }`}>
-                          {row.totalCount > 0
-                            ? `${Math.round((row.citedCount / row.totalCount) * 100)}%`
-                            : '—'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                          {engines.map(engine => {
+                            const info = row.engines[engine]
+                            return (
+                              <td key={engine} className="px-3 py-2 text-center">
+                                {info
+                                  ? <RateCell rate={info.rate} confidence={info.confidence as GeoConfidence} error={info.error} />
+                                  : <span className="text-slate-300">—</span>
+                                }
+                              </td>
+                            )
+                          })}
+                          <td className="px-3 py-2 text-center">
+                            <span className={`text-sm font-black font-mono ${
+                              row.avgCitationRate >= 60 ? 'text-emerald-600' :
+                              row.avgCitationRate >= 30 ? 'text-amber-600' :
+                              row.avgCitationRate > 0   ? 'text-rose-500' :
+                                                          'text-slate-300'
+                            }`}>
+                              {row.avgCitationRate}%
+                            </span>
+                          </td>
+                        </tr>
+                        {open && (
+                          <tr key={`${row.queryId}-detail`} className={i % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+                            <td colSpan={engines.length + 2} className="px-4 pb-3 pt-0">
+                              <div className="bg-slate-50 rounded-lg p-3 text-[11px] text-[#526078] space-y-2">
+                                {(latestRun.aggregated ?? [])
+                                  .filter(r => r.queryId === row.queryId && engines.includes(r.engine) && r.responsePreview)
+                                  .slice(0, 1)
+                                  .map(r => (
+                                    <div key={r.engine}>
+                                      <span className={`font-bold ${ENGINE_META[r.engine].color}`}>{ENGINE_META[r.engine].label} 응답 미리보기</span>
+                                      <p className="mt-1 text-[#1b2559] italic">"{r.responsePreview.slice(0, 200)}{r.responsePreview.length > 200 ? '…' : ''}"</p>
+                                    </div>
+                                  ))
+                                }
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
+
+            {/* P0-2 신뢰도 범례 */}
+            {latestRun.repeatCount > 1 && (
+              <div className="px-4 py-2 border-t border-slate-100 flex items-center gap-4 text-[10px] text-[#737c9c]">
+                <span className="font-semibold">신뢰도 표시:</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" /> 높음</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" /> 중간</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-300 inline-block" /> 낮음</span>
+              </div>
+            )}
           </div>
 
           {/* 경쟁 도메인 */}
-          {topCompetitors(latestRun.results).length > 0 && (
+          {latestCompetitors.length > 0 && (
             <div className="glass-card p-4">
               <div className="flex items-center gap-2 mb-3">
                 <TrendingUp className="w-4 h-4 text-rose-500" />
                 <span className="text-sm font-bold text-[#1b2559]">AI가 함께 언급한 경쟁 도메인</span>
               </div>
               <div className="flex flex-wrap gap-2">
-                {topCompetitors(latestRun.results).map(({ domain, count }) => (
+                {latestCompetitors.map(({ domain, count }) => (
                   <span
                     key={domain}
                     className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-700 font-medium"
@@ -492,12 +703,14 @@ export function GeoMonitoringDashboard() {
                       {new Date(run.runAt).toLocaleString('ko-KR')}
                     </span>
                     <span className={`text-sm font-bold font-mono ${
-                      run.overallCitationRate >= 60 ? 'text-emerald-600'
-                      : run.overallCitationRate >= 30 ? 'text-amber-600'
-                      : 'text-rose-500'
+                      run.overallCitationRate >= 60 ? 'text-emerald-600' :
+                      run.overallCitationRate >= 30 ? 'text-amber-600' : 'text-rose-500'
                     }`}>
                       {run.overallCitationRate}%
                     </span>
+                    {run.repeatCount > 1 && (
+                      <span className="text-[10px] text-[#737c9c]">× {run.repeatCount}회</span>
+                    )}
                   </div>
                   {expandedRun === run.id
                     ? <ChevronUp className="w-4 h-4 text-slate-400" />

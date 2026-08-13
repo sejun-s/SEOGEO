@@ -121,13 +121,15 @@ export default defineConfig({
             }
             try {
               const body = JSON.parse(Buffer.concat(chunks).toString()) as {
-                targetDomain: string
-                targetBrand : string
-                queries     : GeoQuery[]
-                engines     : GeoEngine[]
+                targetDomain  : string
+                targetBrand   : string
+                brandSynonyms : string[]
+                queries       : GeoQuery[]
+                engines       : GeoEngine[]
+                repeatCount   : number
               }
 
-              // API 키: 환경변수 우선, 없으면 Claude 키만 사용 가능
+              // API 키: 환경변수 우선
               const apiKeys: Partial<Record<GeoEngine, string>> = {
                 perplexity : process.env.PPLX_API_KEY,
                 chatgpt    : process.env.OPENAI_API_KEY,
@@ -135,17 +137,19 @@ export default defineConfig({
                 gemini     : process.env.GEMINI_API_KEY,
               }
 
-              const results = await runGeoMonitor({
-                targetDomain : body.targetDomain,
-                targetBrand  : body.targetBrand,
-                queries      : body.queries,
-                engines      : body.engines,
+              const aggregated = await runGeoMonitor({
+                targetDomain  : body.targetDomain,
+                targetBrand   : body.targetBrand,
+                brandSynonyms : body.brandSynonyms ?? [],
+                queries       : body.queries,
+                engines       : body.engines,
+                repeatCount   : body.repeatCount ?? 1,
                 apiKeys,
                 emit,
               })
 
-              const { rates, overall } = calcCitationRates(results, body.engines)
-              emit({ type: 'geo-result', results, citationRates: rates, overallCitationRate: overall, ts: Date.now() })
+              const { rates, overall } = calcCitationRates(aggregated, body.engines)
+              emit({ type: 'geo-result', aggregated, citationRates: rates, overallCitationRate: overall, ts: Date.now() })
             } catch (err) {
               emit({ type: 'error', msg: String(err), ts: Date.now() })
             } finally {
