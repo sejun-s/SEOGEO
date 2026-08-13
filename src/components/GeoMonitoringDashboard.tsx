@@ -18,6 +18,7 @@ import {
 } from '../lib/geoMonitorLib'
 import type { GeoStreamEvent } from '../lib/geoMonitorLib'
 import { GeoActionPanel } from './GeoActionPanel'
+import { GeoComparisonPanel } from './GeoComparisonPanel'
 
 // ── 상수 ─────────────────────────────────────────────────────────────────
 
@@ -775,6 +776,9 @@ export function GeoMonitoringDashboard() {
               </div>
             </div>
           )}
+
+          {/* P2-3: 전후 비교 리포트 (측정 2회 이상일 때만) */}
+          {state.runs.length >= 2 && <GeoComparisonPanel runs={state.runs} />}
 
           {/* P1-3: GEO 개선 액션 플랜 */}
           <GeoActionPanel run={latestRun} />
