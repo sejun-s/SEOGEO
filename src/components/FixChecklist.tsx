@@ -42,9 +42,11 @@ interface Props {
   isScanning: boolean;
   /** 지정 시 해당 카테고리 항목만 표시 */
   filterCategories?: CriteriaItem['category'][];
+  title?: string;
+  description?: string;
 }
 
-export const FixChecklist: React.FC<Props> = ({ audit, onReanalyze, isScanning, filterCategories }) => {
+export const FixChecklist: React.FC<Props> = ({ audit, onReanalyze, isScanning, filterCategories, title = '개선 액션', description = '중요한 문제부터 수정하고 바로 재검사하세요' }) => {
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showAll, setShowAll] = useState(false);
@@ -64,6 +66,7 @@ export const FixChecklist: React.FC<Props> = ({ audit, onReanalyze, isScanning, 
 
     const legacy: CriteriaItem[] = (audit.metrics ?? [])
       .filter(metric => metric.status !== 'pass')
+      .filter(metric => !filterCategories || filterCategories.includes(metric.category))
       .filter(metric => ![normalize(metric.id), normalize(metric.title), normalize(metric.recommendation.split('\n')[0])].some(key => key && known.has(key)))
       .map(metric => ({
         id: `metric-${metric.id}`,
@@ -113,8 +116,8 @@ export const FixChecklist: React.FC<Props> = ({ audit, onReanalyze, isScanning, 
         <div className="flex items-center gap-2.5">
           <ListChecks className="w-4 h-4 text-emerald-400 shrink-0" />
           <div>
-            <div className="text-sm font-semibold text-white">개선 액션</div>
-            <div className="text-[11px] text-slate-500 mt-0.5">중요한 문제부터 수정하고 바로 재검사하세요</div>
+            <div className="text-sm font-semibold text-white">{title}</div>
+            <div className="text-[11px] text-slate-500 mt-0.5">{description}</div>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">

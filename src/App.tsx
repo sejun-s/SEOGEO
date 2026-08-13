@@ -636,6 +636,8 @@ export function App() {
                           onReanalyze={handleScanUrl}
                           isScanning={isScanning}
                           filterCategories={['technical', 'schema', 'bing']}
+                          title="SEO 기반 품질 개선 액션"
+                          description="수집·색인·문서 구조 문제만 우선순위에 따라 수정하세요"
                         />
                       </div>
                       {showLog && (analysisEvents.length > 0 || analysisSignals) && (
@@ -670,6 +672,8 @@ export function App() {
                           onReanalyze={handleScanUrl}
                           isScanning={isScanning}
                           filterCategories={['chatgpt', 'geo', 'eeat']}
+                          title="GEO 인용 준비도 개선 액션"
+                          description="AI 검색 접근·인용 구조·콘텐츠 신뢰 신호만 개선하세요"
                         />
                       </div>
                     </div>
@@ -685,6 +689,8 @@ export function App() {
                           onReanalyze={handleScanUrl}
                           isScanning={isScanning}
                           filterCategories={['naver']}
+                          title="네이버 노출 기반 개선 액션"
+                          description="Yeti 수집·메타·사이트맵 등 네이버 관련 항목만 확인하세요"
                         />
                       </div>
                     </div>
