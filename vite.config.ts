@@ -7,6 +7,9 @@ import { runAnalysis } from './src/server/seoAnalyze.ts'
 import { analyzeSiteWithGemini } from './src/server/insightAnalyze.ts'
 import { validateAndNormalizeUrl, checkRateLimit, maskApiKey } from './src/server/modules/security/urlSecurity.ts'
 import { adminTelemetry } from './src/server/modules/admin/adminService.ts'
+import { runGeoMonitor, calcCitationRates } from './src/server/geoMonitor.ts'
+import { expandGeoQueries } from './src/server/geoQueryExpander.ts'
+import type { GeoEngine, GeoQuery } from './src/types.ts'
 
 export default defineConfig({
   plugins: [
@@ -95,6 +98,116 @@ export default defineConfig({
               emit({ type: 'error', msg: String(err), ts: Date.now() })
             } finally {
               res.end()
+            }
+          })
+        })
+
+        // GEO 모니터링 API (Module C)
+        server.middlewares.use('/api/geo-monitor', (req: IncomingMessage, res: ServerResponse) => {
+          if (req.method !== 'POST') {
+            res.writeHead(405, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ error: 'Method not allowed' }))
+            return
+          }
+          const chunks: Buffer[] = []
+          req.on('data', (c: Buffer) => chunks.push(c))
+          req.on('end', async () => {
+            res.writeHead(200, {
+              'Content-Type': 'application/x-ndjson',
+              'Cache-Control': 'no-cache',
+              'Transfer-Encoding': 'chunked',
+            })
+            const emit = (event: object) => {
+              try { res.write(JSON.stringify(event) + '\n') } catch { /* ignore */ }
+            }
+            try {
+              const body = JSON.parse(Buffer.concat(chunks).toString()) as {
+                targetDomain  : string
+                targetBrand   : string
+                brandSynonyms : string[]
+                queries       : GeoQuery[]
+                engines       : GeoEngine[]
+                repeatCount   : number
+              }
+
+              // API 키: 환경변수 우선
+              const apiKeys: Partial<Record<GeoEngine, string>> = {
+                perplexity : process.env.PPLX_API_KEY,
+                chatgpt    : process.env.OPENAI_API_KEY,
+                claude     : process.env.ANTHROPIC_API_KEY,
+                gemini     : process.env.GEMINI_API_KEY,
+                naver      : process.env.NAVER_CLOVA_API_KEY,   // P2-1
+              }
+
+              const aggregated = await runGeoMonitor({
+                targetDomain  : body.targetDomain,
+                targetBrand   : body.targetBrand,
+                brandSynonyms : body.brandSynonyms ?? [],
+                queries       : body.queries,
+                engines       : body.engines,
+                repeatCount   : body.repeatCount ?? 1,
+                apiKeys,
+                emit,
+              })
+
+              const { rates, overall } = calcCitationRates(aggregated, body.engines)
+              emit({ type: 'geo-result', aggregated, citationRates: rates, overallCitationRate: overall, ts: Date.now() })
+            } catch (err) {
+              emit({ type: 'error', msg: String(err), ts: Date.now() })
+            } finally {
+              res.end()
+            }
+          })
+        })
+
+        // P2-2: GEO 질의 자동 확장 API (LLM 기반)
+        server.middlewares.use('/api/geo-expand-queries', (req: IncomingMessage, res: ServerResponse) => {
+          if (req.method !== 'POST') {
+            res.writeHead(405, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ error: 'Method not allowed' }))
+            return
+          }
+
+          const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1'
+          if (!checkRateLimit(clientIp, 10, 60_000)) {
+            res.writeHead(429, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ error: '요청 한도 초과: 1분 후 다시 시도해 주세요.' }))
+            return
+          }
+
+          const chunks: Buffer[] = []
+          req.on('data', (c: Buffer) => chunks.push(c))
+          req.on('end', async () => {
+            try {
+              const body = JSON.parse(Buffer.concat(chunks).toString()) as {
+                targetDomain : string
+                targetBrand  : string
+                brandSynonyms: string[]
+                existingTexts: string[]
+                count?       : number
+              }
+
+              const apiKey = process.env.ANTHROPIC_API_KEY
+              if (!apiKey) {
+                res.writeHead(400, { 'Content-Type': 'application/json' })
+                res.end(JSON.stringify({ error: 'ANTHROPIC_API_KEY가 서버에 설정되지 않았습니다.' }))
+                return
+              }
+
+              const queries = await expandGeoQueries({
+                targetDomain : body.targetDomain,
+                targetBrand  : body.targetBrand,
+                brandSynonyms: body.brandSynonyms ?? [],
+                existingTexts: body.existingTexts ?? [],
+                apiKey,
+                count        : Math.min(body.count ?? 6, 12),
+              })
+
+              res.writeHead(200, { 'Content-Type': 'application/json' })
+              res.end(JSON.stringify({ queries }))
+            } catch (err) {
+              res.writeHead(500, { 'Content-Type': 'application/json' })
+              res.end(JSON.stringify({ error: String(err) }))
             }
           })
         })

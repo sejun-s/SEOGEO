@@ -115,6 +115,17 @@ export interface AuditResult {
   naverScore?: number;
   lastScanned: string;
 
+  // v0.7: 이전 스캔 카테고리 점수 (재스캔 시 델타 표시용)
+  previousCategoryScores?: {
+    overallScore?: number;
+    technicalScore?: number;
+    chatGptSearchScore?: number;
+    academicGeoScore?: number;
+    eeatScore?: number;
+    schemaScore?: number;
+    bingScore?: number;
+  };
+
   // Block 4 & v3: 점수 모델 필드
   scoreModelVersion?: string       // 예: "v0.6-r1"
   legacyScore?: number             // overallScore의 legacy 복사본
@@ -183,6 +194,42 @@ export interface PresetSite {
 
 export type DetailTabType = 'technical' | 'chatgpt' | 'geo' | 'schema' | 'eeat' | 'cms';
 
+// ─── Shopify AI 가시성 신호 ─────────────────────────────────────────────────
+export interface ShopifySignals {
+  isShopify: true;
+
+  // ── AI 크롤러 접근 ──────────────────────────────────────────────────────────
+  oaiSearchBotStatus: 'explicitly_allowed' | 'allowed_by_general_rule' | 'explicitly_blocked' | 'unknown';
+  gptBotStatus:       'explicitly_allowed' | 'allowed_by_general_rule' | 'explicitly_blocked' | 'unknown';
+
+  // ── 상품 스키마 ─────────────────────────────────────────────────────────────
+  hasProductSchema: boolean;         // @type: "Product" JSON-LD
+  hasOfferSchema: boolean;           // Offer with price
+  hasAggregateRating: boolean;       // AggregateRating (리뷰 점수)
+  hasFaqSchema: boolean;             // FAQPage
+  hasBreadcrumbSchema: boolean;      // BreadcrumbList
+  hasOrganizationSchema: boolean;    // Organization / Brand
+
+  // ── 콘텐츠 & 브랜드 신호 ────────────────────────────────────────────────────
+  hasBlogSection: boolean;           // /blogs/ 경로 링크 감지
+  hasAboutPage: boolean;             // /pages/about 또는 유사 경로
+  hasContactPage: boolean;           // /pages/contact
+  reviewAppDetected?: string;        // 감지된 리뷰 앱 이름 (Judge.me 등)
+
+  // ── 기술 신호 ────────────────────────────────────────────────────────────────
+  hasIndexNow: boolean;              // IndexNow key 메타 태그
+  shopifyVersion?: string;           // CDN 감지 버전
+
+  // ── 스키마 체크 출처 ─────────────────────────────────────────────────────────
+  // Product/Offer/AggregateRating은 상품 페이지에서 확인해야 정확함
+  productPageChecked?: string;       // 실제로 스키마를 확인한 상품 페이지 URL
+  schemaCheckedOnHomepage: boolean;  // true = 홈페이지만 확인 (정확도 낮음)
+
+  // ── 종합 점수 (0-100) ───────────────────────────────────────────────────────
+  shopifyAiScore: number;
+  scoreBreakdown: { label: string; earned: number; max: number; pass: boolean }[];
+}
+
 // 실제 URL에서 추출한 SEO 신호
 export interface PageSignals {
   url: string
@@ -221,6 +268,8 @@ export interface PageSignals {
   hasUALegacy: boolean
   hasFbPixel: boolean
   hasNaverAnalytics: boolean
+  // v0.7.1: Shopify 전용 신호 (쇼피파이 감지 시에만 채워짐)
+  shopify?: ShopifySignals
 }
 
 // 스트리밍 분석 이벤트
@@ -314,4 +363,90 @@ export interface SiteCrawlResult {
   pages: CrawlPageResult[];
   issues: SiteCrawlIssue[];
   comparison?: SiteCrawlComparison;
+}
+
+// ─────────────────────────────────────────────────────────────
+// GEO 모니터링 (Module C) — AI 인용률 실측 엔진
+// ─────────────────────────────────────────────────────────────
+
+export type GeoEngine = 'perplexity' | 'chatgpt' | 'claude' | 'gemini' | 'naver';
+
+export type GeoQueryCategory = 'brand' | 'product' | 'industry' | 'competitor';
+
+/** 통계 신뢰도: 반복 횟수 기반 */
+export type GeoConfidence = 'low' | 'medium' | 'high';
+
+export interface GeoQuery {
+  id: string;
+  text: string;                   // 질의 원문
+  synonyms: string[];             // 동의어 군집
+  category: GeoQueryCategory;
+  targetAudience?: string;        // 대상 독자
+}
+
+/** P0-1: Perplexity citations[] + P0-2: 반복 실행 통계 */
+export interface GeoCheckResult {
+  queryId: string;
+  queryText: string;
+  engine: GeoEngine;
+  // 단일 실행 결과
+  cited: boolean;
+  mentionCount: number;
+  citationSnippet?: string;
+  /** P0-1: Perplexity API citations[] 에서 추출한 실제 인용 URL */
+  citedUrls: string[];
+  competitorMentions: string[];
+  responsePreview: string;
+  checkedAt: string;
+  error?: string;
+}
+
+/** P0-2: 반복 실행 집계 결과 */
+export interface GeoAggregatedResult {
+  queryId: string;
+  queryText: string;
+  engine: GeoEngine;
+  /** 반복 실행 횟수 */
+  repeatCount: number;
+  /** 인용된 횟수 */
+  citedCount: number;
+  /** 인용률 0~100 */
+  citationRate: number;
+  /** 통계 신뢰도 */
+  confidence: GeoConfidence;
+  /** 인용된 실제 URL 목록 (중복 제거) */
+  allCitedUrls: string[];
+  competitorMentions: string[];
+  /** 대표 응답 미리보기 */
+  responsePreview: string;
+  /** P1-2: 인용 컨텍스트 — 브랜드 언급 전후 문맥 (±130자) */
+  bestSnippet?: string;
+  error?: string;
+}
+
+export interface GeoMonitoringRun {
+  id: string;
+  targetDomain: string;
+  targetBrand: string;
+  /** P0-3: 브랜드 동의어 */
+  brandSynonyms: string[];
+  repeatCount: number;
+  runAt: string;
+  /** 집계 결과 (쿼리 × 엔진) */
+  aggregated: GeoAggregatedResult[];
+  /** 엔진별 평균 인용률 (0~100%) */
+  citationRates: Partial<Record<GeoEngine, number>>;
+  /** 전체 평균 인용률 */
+  overallCitationRate: number;
+}
+
+export interface GeoMonitoringState {
+  targetDomain: string;
+  targetBrand: string;
+  /** P0-3: 브랜드 동의어 (온톨로지 1단계) */
+  brandSynonyms: string[];
+  /** 반복 실행 횟수 (1 | 3 | 5) */
+  repeatCount: 1 | 3 | 5;
+  queries: GeoQuery[];
+  runs: GeoMonitoringRun[];
 }

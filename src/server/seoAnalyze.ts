@@ -178,6 +178,185 @@ export async function fetchPageSignals(targetUrl: string, emit?: EmitFn): Promis
     ts: now(),
   })
 
+  // ── Shopify 감지 및 AI 가시성 신호 추출 ────────────────────────────────────
+  const isShopify =
+    /cdn\.shopify\.com/i.test(html) ||
+    /shopify\.theme/i.test(html) ||
+    /myshopify\.com/i.test(targetUrl) ||
+    /<meta[^>]+name=["']shopify-[^"']+["']/i.test(html) ||
+    /window\.Shopify\s*=/i.test(html)
+
+  if (isShopify) {
+    emit?.({ type: 'step', msg: '🛍️ Shopify 스토어 감지 — AI 가시성 체크리스트 분석 중...', level: 'info', ts: now() })
+
+    // ── 상품 페이지 샘플링 ────────────────────────────────────────────────────
+    // Product/Offer/AggregateRating 스키마는 홈페이지가 아닌 상품 페이지에 있음
+    // 홈페이지에서 /products/xxx 링크를 찾아 한 페이지를 추가로 fetch
+    let productPageHtml = ''
+    let productPageChecked: string | undefined
+    let schemaCheckedOnHomepage = true
+
+    const productHrefMatch = html.match(/href=["']([^"']*\/products\/[A-Za-z0-9_%-][^"'?#]*)["']/i)
+    if (productHrefMatch) {
+      const rawHref = productHrefMatch[1]
+      const productUrl = rawHref.startsWith('http')
+        ? rawHref
+        : `${base.origin}${rawHref.startsWith('/') ? '' : '/'}${rawHref}`
+      try {
+        emit?.({ type: 'step', msg: `🔬 상품 페이지 스키마 확인 중: ${rawHref.split('/products/')[1]?.slice(0, 40) ?? ''}`, level: 'info', ts: now() })
+        const productRes = await fetch(productUrl, { headers: HEADERS, signal: AbortSignal.timeout(8000) })
+        if (productRes.ok) {
+          productPageHtml = (await productRes.text()).slice(0, 200_000)
+          productPageChecked = productUrl
+          schemaCheckedOnHomepage = false
+        }
+      } catch {
+        // 상품 페이지 접근 실패 → 홈페이지 HTML로 fallback
+      }
+    }
+
+    // 스키마 확인 대상: 상품 페이지 우선, 없으면 홈페이지
+    const schemaHtml = productPageHtml || html
+
+    // ── JSON-LD 타입 파싱 ─────────────────────────────────────────────────────
+    const extractLdRaw = (src: string): string[] => {
+      const results: string[] = []
+      const re = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi
+      let m: RegExpExecArray | null
+      while ((m = re.exec(src)) !== null) results.push(m[1].trim().slice(0, 3000))
+      return results
+    }
+
+    const parseLdTypes = (raws: string[]): string[] =>
+      raws.flatMap((raw) => {
+        try {
+          const obj = JSON.parse(raw) as Record<string, unknown>
+          const collect = (o: Record<string, unknown>): string[] => {
+            const types: string[] = []
+            if (typeof o['@type'] === 'string') types.push(o['@type'])
+            if (Array.isArray(o['@type'])) types.push(...(o['@type'] as string[]))
+            for (const v of Object.values(o)) {
+              if (v && typeof v === 'object' && !Array.isArray(v))
+                types.push(...collect(v as Record<string, unknown>))
+            }
+            return types
+          }
+          return collect(obj)
+        } catch { return [] }
+      })
+
+    const ldTypes = parseLdTypes(extractLdRaw(schemaHtml))
+
+    const hasProductSchema      = ldTypes.some(t => /^product$/i.test(t))
+    const hasOfferSchema        = ldTypes.some(t => /^offer(s)?$/i.test(t))
+    const hasAggregateRating    = ldTypes.some(t => /^aggregaterating$/i.test(t))
+    const hasFaqSchema          = ldTypes.some(t => /^faqpage$/i.test(t))
+    const hasBreadcrumbSchema   = ldTypes.some(t => /^breadcrumblist$/i.test(t))
+    const hasOrganizationSchema = ldTypes.some(t => /^(organization|brand|store)$/i.test(t))
+
+    // 콘텐츠·브랜드 신호 (홈페이지 네비 기준)
+    const hasBlogSection  = /href=["'][^"']*\/blogs\//i.test(html)
+    const hasAboutPage    = /href=["'][^"']*\/pages\/(?:about|brand|who-we-are|our-story|about-us|about-brand|story|team|company)/i.test(html)
+    const hasContactPage  = /href=["'][^"']*\/pages\/(?:contact|contact-us|support|help)/i.test(html)
+
+    // 리뷰 앱 감지
+    const reviewAppDetected = /judgeme|judge\.me/i.test(html)
+      ? 'Judge.me'
+      : /okendo\.io/i.test(html)
+      ? 'Okendo'
+      : /yotpo/i.test(html)
+      ? 'Yotpo'
+      : /stamped\.io/i.test(html)
+      ? 'Stamped.io'
+      : /loox\.io/i.test(html)
+      ? 'Loox'
+      : undefined
+
+    // IndexNow
+    const hasIndexNow = /indexnow/i.test(html)
+
+    // AI 크롤러 접근 상태
+    const oaiSearchBotStatus = interpretBotAccess(robotsTxt, 'oai-searchbot')
+    const gptBotStatus       = interpretBotAccess(robotsTxt, 'gptbot')
+
+    // ── 점수 계산 ─────────────────────────────────────────────────────────────
+    type ScoreEntry = { label: string; earned: number; max: number; pass: boolean }
+    const breakdown: ScoreEntry[] = [
+      {
+        label: 'OAI-SearchBot 접근 허용',
+        max: 20,
+        pass: oaiSearchBotStatus !== 'explicitly_blocked',
+        earned: oaiSearchBotStatus !== 'explicitly_blocked' ? 20 : 0,
+      },
+      {
+        label: 'Product JSON-LD 스키마',
+        max: 20,
+        pass: hasProductSchema,
+        earned: hasProductSchema ? 20 : 0,
+      },
+      {
+        label: 'Offer.price 스키마 (가격 구조화)',
+        max: 15,
+        pass: hasOfferSchema,
+        earned: hasOfferSchema ? 15 : 0,
+      },
+      {
+        label: 'AggregateRating (리뷰 스키마)',
+        max: 15,
+        pass: hasAggregateRating,
+        earned: hasAggregateRating ? 15 : 0,
+      },
+      {
+        label: '블로그 섹션 활성화',
+        max: 10,
+        pass: hasBlogSection,
+        earned: hasBlogSection ? 10 : 0,
+      },
+      {
+        label: 'FAQPage 스키마',
+        max: 10,
+        pass: hasFaqSchema,
+        earned: hasFaqSchema ? 10 : 0,
+      },
+      {
+        label: '브랜드 About 페이지',
+        max: 10,
+        pass: hasAboutPage,
+        earned: hasAboutPage ? 10 : 0,
+      },
+    ]
+
+    const shopifyAiScore = breakdown.reduce((s, b) => s + b.earned, 0)
+
+    signals.shopify = {
+      isShopify: true,
+      oaiSearchBotStatus,
+      gptBotStatus,
+      hasProductSchema,
+      hasOfferSchema,
+      hasAggregateRating,
+      hasFaqSchema,
+      hasBreadcrumbSchema,
+      hasOrganizationSchema,
+      hasBlogSection,
+      hasAboutPage,
+      hasContactPage,
+      reviewAppDetected,
+      hasIndexNow,
+      productPageChecked,
+      schemaCheckedOnHomepage,
+      shopifyAiScore,
+      scoreBreakdown: breakdown,
+    }
+
+    emit?.({
+      type: 'step',
+      msg: `🛍️ Shopify AI 점수 ${shopifyAiScore}/100 — Product: ${hasProductSchema ? '✅' : '❌'} | AggRating: ${hasAggregateRating ? '✅' : '❌'} | Blog: ${hasBlogSection ? '✅' : '❌'}`,
+      level: shopifyAiScore >= 70 ? 'success' : shopifyAiScore >= 40 ? 'info' : 'warn',
+      ts: now(),
+    })
+  }
+
   return signals
 }
 

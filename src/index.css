@@ -265,6 +265,14 @@ body { background: #e8edf7; color: var(--v03-ink); letter-spacing: -.012em; }
 .v03-header input { background: #f7fafb !important; border-color: #dce6e9 !important; color: var(--v03-ink) !important; }
 .v03-header .btn-purple, .v03-shell .btn-purple { background: var(--v03-teal); box-shadow: none; border-radius: 12px; }
 .v03-header .btn-purple:hover, .v03-shell .btn-purple:hover { background: var(--v03-teal-dark); transform: translateY(-1px); box-shadow: 0 8px 18px rgba(28,166,158,.2); }
+/* 헤더 탭 글자색 — 흰 배경이므로 Tailwind text-white 및 밝은 색 강제 오버라이드 */
+.v03-header nav button { color: var(--v03-muted) !important; }
+.v03-header nav button:hover { color: var(--v03-ink) !important; }
+.v03-header nav button[class*="border-indigo"],
+.v03-header nav button[class*="text-white"],
+.v03-header nav button[class*="text-slate-200"],
+.v03-header nav button[class*="text-slate-100"] { color: var(--v03-ink) !important; }
+.v03-header nav button[class*="border-indigo"] { border-color: var(--v03-teal) !important; }
 
 .v03-main-tabs { background: rgba(255,255,255,.94); border-bottom: 1px solid var(--v03-line); backdrop-filter: blur(12px); }
 .v03-main-tabs button { min-height: 48px; }

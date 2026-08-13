@@ -40,9 +40,11 @@ interface Props {
   audit: AuditResult;
   onReanalyze: (url: string) => void;
   isScanning: boolean;
+  /** 지정 시 해당 카테고리 항목만 표시 */
+  filterCategories?: CriteriaItem['category'][];
 }
 
-export const FixChecklist: React.FC<Props> = ({ audit, onReanalyze, isScanning }) => {
+export const FixChecklist: React.FC<Props> = ({ audit, onReanalyze, isScanning, filterCategories }) => {
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [showAll, setShowAll] = useState(false);
@@ -51,11 +53,13 @@ export const FixChecklist: React.FC<Props> = ({ audit, onReanalyze, isScanning }
     setChecked(new Set());
     setExpanded(new Set());
     setShowAll(false);
-  }, [audit.url]);
+  }, [audit.url, filterCategories]);
 
   const items = useMemo(() => {
     const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9가-힣]/g, '');
-    const criteria = (audit.criteria ?? []).filter(item => item.status !== 'pass');
+    const criteria = (audit.criteria ?? [])
+      .filter(item => item.status !== 'pass')
+      .filter(item => !filterCategories || filterCategories.includes(item.category));
     const known = new Set(criteria.flatMap(item => [normalize(item.id), normalize(item.name), normalize(item.improvement.split('\n')[0])]));
 
     const legacy: CriteriaItem[] = (audit.metrics ?? [])
@@ -81,7 +85,8 @@ export const FixChecklist: React.FC<Props> = ({ audit, onReanalyze, isScanning }
 
     return [...criteria, ...legacy]
       .sort((a, b) => ({ critical: 0, high: 1, medium: 2, low: 3 }[a.priority] - { critical: 0, high: 1, medium: 2, low: 3 }[b.priority] || b.estimatedScoreGain - a.estimatedScoreGain));
-  }, [audit.criteria, audit.metrics]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audit.criteria, audit.metrics, filterCategories]);
 
   const visibleItems = showAll ? items : items.slice(0, 7);
 
